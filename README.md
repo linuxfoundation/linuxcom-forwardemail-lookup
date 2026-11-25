@@ -93,7 +93,7 @@ Once all eight secrets are set, merge to `main` (or run **Deploy** manually). Th
 ## Local development
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 cp .dev.vars.example .dev.vars   # fill in FORWARDEMAIL_API_TOKEN / GOOGLE_SA_KEY_JSON
 npm run dev                      # http://localhost:8787 (keeps the real localhost origin)
 ```
@@ -102,8 +102,18 @@ npm run dev                      # http://localhost:8787 (keeps the real localho
 
 ```bash
 npm run typecheck
-npm test
+npm test               # unit tests + fast-check fuzzing (test/fuzz.test.ts)
+npm run lint:lockfile
 ```
+
+## Supply-chain security
+
+Dependency and CI rules are in [AGENTS.md](AGENTS.md), which follows [package-manager-hardening](https://github.com/jordanconway/package-manager-hardening). How to report a vulnerability is in [SECURITY.md](SECURITY.md). In short:
+
+- **Dependencies:** exact pins, committed lockfile, `npm ci --ignore-scripts`, lockfile-lint, `npm audit signatures`, `npm audit`.
+- **Updates:** a 7-day Dependabot cooldown.
+- **Workflows:** SHA-pinned actions with Harden-Runner, zizmor (auditor persona) and dependency review on PRs.
+- **Code scanning:** CodeQL default setup.
 
 ## Behavior notes
 
@@ -113,3 +123,7 @@ npm test
 - Upstream errors appear on that source's card. The Google 403 and token-exchange messages include the OAuth error code to help diagnose delegation setup.
 - **Google 403 for a single address.** Google returns 403 (not 404) when an address belongs to a Google account outside this Workspace. The app then checks groups, then whether the admin subject can read its own record. If it can, the card shows **Not in Workspace**, never a conflict. With the Cloud Identity scope, it also says whether the address is an **unmanaged personal account** (`isInvitableUser`) or something else. If the admin subject can't read its own record either, it's a setup problem and is shown as an error.
 - Any lookup with a non-200/404 Google call returns a `googleTrace` (shown under **Why?**) and logs a `google_trace` event with each call's step, HTTP status, timing and Google's full error response. Tokens are never logged.
+
+## License
+
+[MIT](LICENSE) © The Linux Foundation. The bundled Inter font in `public/fonts/` is under the SIL Open Font License 1.1 ([public/fonts/Inter-LICENSE.txt](public/fonts/Inter-LICENSE.txt)).

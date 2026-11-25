@@ -1,6 +1,7 @@
 {
   "name": "linuxcom-forwardemail-lookup",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --infer-origin-from-routes=false",
@@ -8,16 +9,19 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cf-typegen": "wrangler types",
-    "fonts": "cp node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2 public/fonts/ && cp node_modules/@fontsource-variable/inter/LICENSE public/fonts/Inter-LICENSE.txt"
+    "fonts": "cp node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2 public/fonts/ && cp node_modules/@fontsource-variable/inter/LICENSE public/fonts/Inter-LICENSE.txt",
+    "lint:lockfile": "lockfile-lint --path package-lock.json --type npm --allowed-hosts npm --validate-https --validate-integrity --validate-package-names"
   },
   "dependencies": {
-    "jose": "^6.2.18"
+    "jose": "6.2.18"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261125.1",
-    "@fontsource-variable/inter": "^5.3.0",
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.12",
-    "wrangler": "^4.168.0"
+    "@cloudflare/workers-types": "5.20261118.1",
+    "@fontsource-variable/inter": "5.3.0",
+    "fast-check": "4.10.3",
+    "lockfile-lint": "5.1.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12",
+    "wrangler": "4.165.0"
   }
 }

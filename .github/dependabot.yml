@@ -1,0 +1,67 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    # Runtime + dev dependencies (package.json / package-lock.json). The
+    # release-age cooldown lives here rather than in .npmrc so Dependabot
+    # security updates (which bypass the cooldown) keep flowing.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 7   # never below the 7-day minimum
+
+  - package-ecosystem: "uv"
+    # CI-only Python tooling (zizmor) in tools/pyproject.toml + tools/uv.lock.
+    directory: "/tools"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 7   # never below the 7-day minimum
+
+  - package-ecosystem: "github-actions"
+    # Actions used in .github/workflows/ (all SHA-pinned with a
+    # `# vX.Y.Z` comment; Dependabot bumps both).
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    # Action tags aren't always parsed as SemVer, so only default-days
+    # reliably applies.
+    cooldown:
+      default-days: 7
