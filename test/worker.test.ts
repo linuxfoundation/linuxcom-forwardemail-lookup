@@ -327,10 +327,49 @@ describe("Google Workspace lookup", () => {
     expect(body.google).toEqual({ error: "Google token exchange failed (HTTP 401: unauthorized_client)" });
   });
 
-  it("explains 403s from the Directory API", async () => {
-    upstreams({ [USERS]: () => jsonRes({ error: { code: 403 } }, 403) });
+  it("includes Google's reason for Directory API errors", async () => {
+    upstreams({
+      [USERS]: () =>
+        jsonRes(
+          {
+            error: {
+              code: 403,
+              message: "Not Authorized to access this resource/api",
+              errors: [{ reason: "forbidden" }],
+            },
+          },
+          403,
+        ),
+    });
     const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
-    expect(body.google.error).toMatch(/HTTP 403/);
+    expect(body.google).toEqual({
+      error: "Google Directory API returned HTTP 403: forbidden - Not Authorized to access this resource/api",
+    });
+  });
+
+  it("prefers the structured reason (e.g. SERVICE_DISABLED)", async () => {
+    upstreams({
+      [USERS]: () =>
+        jsonRes(
+          {
+            error: {
+              code: 403,
+              status: "PERMISSION_DENIED",
+              message: "Admin SDK API has not been used in project 123 before or it is disabled.",
+              details: [{ reason: "SERVICE_DISABLED" }],
+            },
+          },
+          403,
+        ),
+    });
+    const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
+    expect(body.google.error).toMatch(/^Google Directory API returned HTTP 403: SERVICE_DISABLED - Admin SDK API/);
+  });
+
+  it("copes with a non-JSON error body", async () => {
+    upstreams({ [USERS]: () => new Response("nope", { status: 500 }) });
+    const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
+    expect(body.google).toEqual({ error: "Google Directory API returned HTTP 500" });
   });
 });
 

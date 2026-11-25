@@ -111,17 +111,41 @@ async function accessToken(env: Env): Promise<string> {
 const strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
+/**
+ * Google's error envelope says why a call failed (e.g. reason "forbidden"
+ * with "Not Authorized to access this resource/api", or SERVICE_DISABLED
+ * when the Admin SDK API is off). It holds no secrets, so it is shown as-is.
+ */
+async function googleErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: {
+        message?: unknown;
+        status?: unknown;
+        errors?: Array<{ reason?: unknown }>;
+        details?: Array<{ reason?: unknown }>;
+      };
+    };
+    const e = body.error;
+    if (!e) return "";
+    const reason = [e.details?.[0]?.reason, e.errors?.[0]?.reason, e.status].find(
+      (r): r is string => typeof r === "string" && r.length > 0,
+    );
+    const message = typeof e.message === "string" ? e.message.slice(0, 300) : "";
+    return [reason, message].filter(Boolean).join(" - ");
+  } catch {
+    return "";
+  }
+}
+
 async function directoryGet(path: string, token: string): Promise<Record<string, unknown> | null> {
   const res = await fetch(`${DIRECTORY}${path}`, {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },
   });
   if (res.status === 404) return null;
   if (!res.ok) {
-    throw new PublicError(
-      res.status === 403
-        ? "Google Directory API denied access (HTTP 403): check delegation scopes, the admin subject's role, and that the domain belongs to the tenant"
-        : `Google Directory API returned HTTP ${res.status}`,
-    );
+    const detail = await googleErrorDetail(res);
+    throw new PublicError(`Google Directory API returned HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
   }
   return (await res.json()) as Record<string, unknown>;
 }
