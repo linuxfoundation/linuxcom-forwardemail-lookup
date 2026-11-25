@@ -425,6 +425,22 @@ describe("Google Workspace lookup", () => {
       expect(calls.some((r) => r.url.startsWith(GROUPS))).toBe(true);
     });
 
+    it("treats a 403 from groups.get (after a users.get 404) the same way", async () => {
+      upstreams({
+        [GROUPS]: forbidden,
+        [SUBJECT]: readableSubject,
+        [CI]: () => jsonRes({ isInvitableUser: true }),
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({ found: false, outsideTenant: true, accountType: "unmanaged" });
+      expect(body.googleTrace.map((s: any) => [s.step, s.status])).toEqual([
+        ["users.get", 404],
+        ["groups.get", 403],
+        ["self-check", 200],
+        ["cloudidentity.isInvitableUser", 200],
+      ]);
+    });
+
     it("identifies an unmanaged personal account via Cloud Identity", async () => {
       const scopes: string[] = [];
       const calls = upstreams({

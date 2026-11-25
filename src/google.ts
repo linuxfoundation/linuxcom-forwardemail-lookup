@@ -295,12 +295,13 @@ export async function lookupGoogle(email: string, env: Env, trace: TraceStep[] =
     };
   }
 
-  // Neither a user nor a group here. A 403 (rather than 404) for the user
-  // means Google knows the address but it belongs outside this customer,
-  // unless the directory is not readable at all, which is a setup error.
-  if (user.status === "forbidden") {
+  // Neither a user nor a group here. A 403 (rather than 404) from either
+  // lookup means Google knows the address but it belongs outside this
+  // customer, unless the directory is not readable at all (a setup error).
+  const forbidden = user.status === "forbidden" ? user : group.status === "forbidden" ? group : null;
+  if (forbidden) {
     const customerId = await selfCheck(env, token, trace);
-    if (customerId === null) throw user.error;
+    if (customerId === null) throw forbidden.error;
     const invitable = await isInvitableUser(email, customerId, env, trace);
     const accountType: OutsideTenantKind = invitable === null ? "unknown" : invitable ? "unmanaged" : "other";
     return { found: false, outsideTenant: true, accountType };
