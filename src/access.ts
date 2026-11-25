@@ -9,9 +9,23 @@ export class AuthError extends Error {}
 
 const jwksByIssuer = new Map<string, JWTVerifyGetKey>();
 
-function teamIssuer(teamDomain: string): string {
-  const host = teamDomain.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  return `https://${host}`;
+/**
+ * Normalizes ACCESS_TEAM_DOMAIN ("team.cloudflareaccess.com", optionally
+ * with a scheme or trailing slashes) to the issuer URL. Plain string
+ * operations rather than regexes, so the work is linear in the input
+ * (CodeQL js/polynomial-redos flagged `/\/+$/`).
+ */
+export function teamIssuer(teamDomain: string): string {
+  let host = teamDomain.trim();
+  for (const scheme of ["https://", "http://"]) {
+    if (host.slice(0, scheme.length).toLowerCase() === scheme) {
+      host = host.slice(scheme.length);
+      break;
+    }
+  }
+  let end = host.length;
+  while (end > 0 && host[end - 1] === "/") end--;
+  return `https://${host.slice(0, end)}`;
 }
 
 function cookie(req: Request, name: string): string | null {
