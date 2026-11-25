@@ -13,6 +13,8 @@
   --miss-bg: #eaeef2;
   --err: #b42318;
   --err-bg: #fee4e2;
+  --warn: #9a6700;
+  --warn-bg: #fff8c5;
   --radius: 10px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -32,6 +34,8 @@
     --miss-bg: #232a33;
     --err: #ff8a80;
     --err-bg: #3a1a18;
+    --warn: #e3b341;
+    --warn-bg: #2e2510;
   }
 }
 
@@ -128,6 +132,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .status a { color: inherit; }
 
 .query { font-size: 1.1rem; margin: 4px 0 14px; overflow-wrap: anywhere; }
+
+.warning {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.warning strong { color: var(--warn); }
+
+.card.found.shadowed { border-top-color: var(--warn); }
+.card.found.shadowed .badge { color: var(--warn); background: var(--warn-bg); }
 
 .cards {
   display: grid;

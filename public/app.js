@@ -58,7 +58,7 @@ function renderCard(id, result, describe) {
   const badge = card.querySelector('[data-role="badge"]');
   const dl = card.querySelector('[data-role="details"]');
   dl.replaceChildren();
-  card.classList.remove("found", "missing", "error");
+  card.classList.remove("found", "missing", "error", "shadowed");
 
   if (result.error) {
     card.classList.add("error");
@@ -110,6 +110,28 @@ function describeGoogle(r, badge, dl) {
   row(dl, "Aliases", r.aliases);
 }
 
+// Google Workspace routing rules take priority over ForwardEmail for this
+// domain, so when both have the address only Google receives the mail.
+function renderConflict(data) {
+  const box = $("conflict");
+  box.hidden = !data.conflict;
+  if (!data.conflict) return;
+
+  const g = data.google;
+  const target =
+    g.kind === "user" || g.kind === "user-alias"
+      ? `the Google Workspace user ${g.primaryEmail}`
+      : `the Google Workspace group ${g.email}`;
+  $("conflict-text").textContent =
+    ` Mail to ${data.query} is delivered to ${target} because Google Workspace routing rules take priority. ` +
+    "The ForwardEmail alias will not receive it.";
+
+  const dl = $("card-fe").querySelector('[data-role="details"]');
+  row(dl, "Receives mail", "No: Google Workspace takes priority");
+  $("card-fe").classList.add("shadowed");
+  $("card-fe").querySelector('[data-role="badge"]').textContent = "Found (not receiving)";
+}
+
 let inFlight = null;
 
 async function lookup(event) {
@@ -132,6 +154,7 @@ async function lookup(event) {
     $("query").textContent = data.query;
     renderCard("card-fe", data.forwardemail, describeFe);
     renderCard("card-google", data.google, describeGoogle);
+    renderConflict(data);
     $("results").hidden = false;
     setStatus("");
     history.replaceState(null, "", `?user=${encodeURIComponent(value)}`);

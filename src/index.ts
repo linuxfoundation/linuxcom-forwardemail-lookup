@@ -34,10 +34,17 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
     lookupGoogle(`${local}@${env.GOOGLE_LOOKUP_DOMAIN}`, env),
   ]);
 
+  const forwardemail = settled(fe, "forwardemail");
+  const googleResult = settled(google, "google");
   const body = {
     query: `${local}@${env.FE_DOMAIN}`,
-    forwardemail: settled(fe, "forwardemail"),
-    google: settled(google, "google"),
+    forwardemail,
+    google: googleResult,
+    // Google Workspace routing takes priority over ForwardEmail for linux.com,
+    // so an address that exists in both is delivered to Google only.
+    conflict:
+      !("error" in forwardemail) && forwardemail.found &&
+      !("error" in googleResult) && googleResult.found,
   };
 
   // Audit trail in Workers Logs. No recipients or secrets.
@@ -49,6 +56,7 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
       forwardemail: "error" in body.forwardemail ? "error" : body.forwardemail.found,
       google:
         "error" in body.google ? "error" : body.google.found ? body.google.kind : false,
+      conflict: body.conflict,
     }),
   );
 

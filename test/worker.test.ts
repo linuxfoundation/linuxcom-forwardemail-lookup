@@ -167,7 +167,38 @@ describe("/api/lookup", () => {
       query: "nobody@linux.com",
       forwardemail: { found: false },
       google: { found: false },
+      conflict: false,
     });
+  });
+
+  it("flags a conflict when the address exists in both sources", async () => {
+    upstreams({
+      [FE]: () => jsonRes({ name: "jdoe", is_enabled: true, recipients: ["x@example.com"] }),
+      [USERS]: () => jsonRes({ primaryEmail: "jdoe@linux.com" }),
+    });
+    const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
+    expect(body.conflict).toBe(true);
+  });
+
+  it.each([
+    ["only ForwardEmail", { name: "jdoe" }, null],
+    ["only Google", null, { primaryEmail: "jdoe@linux.com" }],
+  ])("does not flag a conflict when found in %s", async (_label, fe, user) => {
+    upstreams({
+      ...(fe ? { [FE]: () => jsonRes(fe) } : {}),
+      ...(user ? { [USERS]: () => jsonRes(user) } : {}),
+    });
+    const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
+    expect(body.conflict).toBe(false);
+  });
+
+  it("does not flag a conflict when a source errored", async () => {
+    upstreams({
+      [FE]: () => jsonRes({ name: "jdoe" }),
+      [USERS]: () => jsonRes({ error: { code: 403 } }, 403),
+    });
+    const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
+    expect(body.conflict).toBe(false);
   });
 
   it("returns ForwardEmail alias details and sends Basic auth", async () => {
