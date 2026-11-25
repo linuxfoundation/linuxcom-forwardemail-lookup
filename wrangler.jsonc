@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "linuxcom-forwardemail-lookup",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-20",
+
+  // Static SPA from public/. Only /api/* runs the Worker first; everything
+  // else is served directly from the asset store.
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // The app must only be reachable through the Access-protected hostname,
+  // which the deploy workflow attaches with `--domain` from the
+  // WORKER_HOSTNAME GitHub secret.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": { "enabled": true },
+
+  // Non-sensitive defaults. Everything environment-specific
+  // (ACCESS_TEAM_DOMAIN, ACCESS_AUD, GOOGLE_ADMIN_SUBJECT and the API keys)
+  // is a Worker secret pushed from GitHub secrets by the deploy workflow;
+  // see README.md.
+  "vars": {
+    "FE_DOMAIN": "linux.com",
+    "GOOGLE_LOOKUP_DOMAIN": "linux.com"
+  }
+}

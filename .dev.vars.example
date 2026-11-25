@@ -1,0 +1,18 @@
+# Copy to .dev.vars for `npm run dev`. Never commit .dev.vars.
+# In production these all come from GitHub secrets (see README.md).
+
+# Skips Cloudflare Access JWT checks, but ONLY when the request host is
+# localhost/127.0.0.1. Never set this as a deployed secret.
+DEV_BYPASS_ACCESS=1
+
+# ForwardEmail API token (account with access to the linux.com domain)
+FORWARDEMAIL_API_TOKEN=
+
+# Google Workspace: full service-account JSON key on one line, and the
+# account it impersonates
+GOOGLE_SA_KEY_JSON=
+GOOGLE_ADMIN_SUBJECT=
+
+# Only needed to test real Access tokens locally
+# ACCESS_TEAM_DOMAIN=yourteam.cloudflareaccess.com
+# ACCESS_AUD=

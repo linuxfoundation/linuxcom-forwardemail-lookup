@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>linux.com Address Lookup</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="bar">
+      <h1>linux.com address lookup</h1>
+      <span id="whoami" class="muted" aria-live="polite"></span>
+    </header>
+
+    <main>
+      <form id="lookup" autocomplete="off" novalidate>
+        <label for="user" class="sr-only">Address</label>
+        <div class="field">
+          <input
+            id="user"
+            name="user"
+            type="text"
+            inputmode="email"
+            spellcheck="false"
+            autocapitalize="none"
+            placeholder="username"
+            maxlength="80"
+            required
+            autofocus
+          />
+          <span class="suffix" id="suffix">@linux.com</span>
+        </div>
+        <button type="submit" id="go">Look up</button>
+      </form>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <section id="results" class="results" hidden>
+        <h2 id="query" class="query"></h2>
+        <div class="cards">
+          <article class="card" id="card-fe">
+            <header>
+              <h3>ForwardEmail</h3>
+              <span class="badge" data-role="badge"></span>
+            </header>
+            <dl data-role="details"></dl>
+          </article>
+          <article class="card" id="card-google">
+            <header>
+              <h3>Google Workspace</h3>
+              <span class="badge" data-role="badge"></span>
+            </header>
+            <dl data-role="details"></dl>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
