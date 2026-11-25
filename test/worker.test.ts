@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import worker from "../src/index";
 import { resetGoogleTokenCache } from "../src/google";
 import { normalizeLocalPart } from "../src/validate";
+import { teamIssuer } from "../src/access";
 import type { Env } from "../src/env";
 import { AUD, TEAM, jsonRes, makeEnv, makeKeys, mockFetch, type Keys } from "./helpers";
 
@@ -81,6 +82,26 @@ describe("normalizeLocalPart", () => {
     "x".repeat(65),
   ])("rejects %j", (input) => {
     expect(normalizeLocalPart(input, "linux.com")).toBeNull();
+  });
+});
+
+describe("teamIssuer", () => {
+  it.each([
+    ["team.cloudflareaccess.com", "https://team.cloudflareaccess.com"],
+    ["  team.cloudflareaccess.com  ", "https://team.cloudflareaccess.com"],
+    ["https://team.cloudflareaccess.com", "https://team.cloudflareaccess.com"],
+    ["HTTPS://team.cloudflareaccess.com/", "https://team.cloudflareaccess.com"],
+    ["http://team.cloudflareaccess.com///", "https://team.cloudflareaccess.com"],
+    ["team.cloudflareaccess.com/", "https://team.cloudflareaccess.com"],
+  ])("normalizes %j", (input, expected) => {
+    expect(teamIssuer(input)).toBe(expected);
+  });
+
+  it("stays linear on pathological input (no ReDoS)", () => {
+    const evil = "a" + "/".repeat(200_000) + "b" + "/".repeat(200_000);
+    const started = performance.now();
+    expect(teamIssuer(evil)).toBe("https://a" + "/".repeat(200_000) + "b");
+    expect(performance.now() - started).toBeLessThan(250);
   });
 });
 
