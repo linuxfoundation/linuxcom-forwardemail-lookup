@@ -402,6 +402,53 @@ describe("Google Workspace lookup", () => {
     const body = (await (await authed("/api/lookup?user=jdoe")).json()) as Record<string, any>;
     expect(body.google).toEqual({ error: "Google Directory API returned HTTP 500" });
   });
+
+  describe("403 for a single address", () => {
+    const SUBJECT = `${USERS}readonly-admin%40example.org`;
+    const forbidden = () =>
+      jsonRes(
+        { error: { code: 403, message: "Not Authorized to access this resource/api", errors: [{ reason: "forbidden" }] } },
+        403,
+      );
+
+    it("reports an account outside the tenant when the directory is readable", async () => {
+      const calls = upstreams({
+        [`${USERS}outsider%40linux.com`]: forbidden,
+        [SUBJECT]: () => jsonRes({ primaryEmail: "readonly-admin@example.org" }),
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({ found: false, outsideTenant: true });
+      expect(calls.some((r) => r.url.startsWith(GROUPS))).toBe(true);
+    });
+
+    it("never flags a conflict for an outside-tenant account", async () => {
+      upstreams({
+        [FE]: () => jsonRes({ name: "outsider", is_enabled: true, recipients: ["outsider@example.com"] }),
+        [`${USERS}outsider%40linux.com`]: forbidden,
+        [SUBJECT]: () => jsonRes({ primaryEmail: "readonly-admin@example.org" }),
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.forwardemail.found).toBe(true);
+      expect(body.conflict).toBe(false);
+    });
+
+    it("still finds a group after a 403 on the user lookup", async () => {
+      upstreams({
+        [`${USERS}team%40linux.com`]: forbidden,
+        [GROUPS]: () => jsonRes({ email: "team@linux.com", name: "Team" }),
+      });
+      const body = (await (await authed("/api/lookup?user=team")).json()) as Record<string, any>;
+      expect(body.google).toMatchObject({ found: true, kind: "group", email: "team@linux.com" });
+    });
+
+    it("stays an error when the admin subject cannot read the directory either", async () => {
+      upstreams({ [USERS]: forbidden, [GROUPS]: forbidden });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({
+        error: "Google Directory API returned HTTP 403: forbidden - Not Authorized to access this resource/api",
+      });
+    });
+  });
 });
 
 describe("routing", () => {

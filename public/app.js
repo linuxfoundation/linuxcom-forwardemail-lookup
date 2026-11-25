@@ -69,6 +69,11 @@ function renderCard(id, result, describe) {
   if (!result.found) {
     card.classList.add("missing");
     badge.textContent = "Not found";
+    if (result.outsideTenant) {
+      badge.textContent = "Not in Workspace";
+      row(dl, "Details", "A Google account outside this Workspace uses this address (an unmanaged personal or conflicting account). It does not receive this domain's mail.");
+      row(dl, "Where to look", "Admin console → Directory → Unmanaged users");
+    }
     return;
   }
   card.classList.add("found");

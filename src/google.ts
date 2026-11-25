@@ -10,6 +10,13 @@ const SCOPES = [
 
 export type GoogleResult =
   | { found: false }
+  /**
+   * Google refused to describe the address although the directory is
+   * otherwise readable: a Google account outside this Workspace (an
+   * unmanaged personal or conflicting account) uses it. Such an account does
+   * not receive this domain's mail.
+   */
+  | { found: false; outsideTenant: true }
   | {
       found: true;
       kind: "user" | "user-alias";
@@ -138,16 +145,36 @@ async function googleErrorDetail(res: Response): Promise<string> {
   }
 }
 
-async function directoryGet(path: string, token: string): Promise<Record<string, unknown> | null> {
+type DirectoryResponse =
+  | { status: "ok"; body: Record<string, unknown> }
+  | { status: "missing" }
+  | { status: "forbidden"; error: PublicError };
+
+const directoryError = (status: number, detail: string) =>
+  new PublicError(`Google Directory API returned HTTP ${status}${detail ? `: ${detail}` : ""}`);
+
+/** GET a Directory resource. 404 and 403 are returned; other failures throw. */
+async function directoryGet(path: string, token: string): Promise<DirectoryResponse> {
   const res = await fetch(`${DIRECTORY}${path}`, {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },
   });
-  if (res.status === 404) return null;
-  if (!res.ok) {
-    const detail = await googleErrorDetail(res);
-    throw new PublicError(`Google Directory API returned HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+  if (res.status === 404) return { status: "missing" };
+  if (res.status === 403) {
+    return { status: "forbidden", error: directoryError(403, await googleErrorDetail(res)) };
   }
-  return (await res.json()) as Record<string, unknown>;
+  if (!res.ok) throw directoryError(res.status, await googleErrorDetail(res));
+  return { status: "ok", body: (await res.json()) as Record<string, unknown> };
+}
+
+/**
+ * True when the delegated admin can read its own user record. A setup
+ * problem (missing role, wrong subject, scopes) makes every Directory call
+ * 403, including this one; an address owned outside the tenant does not.
+ */
+async function directoryReadable(env: Env, token: string): Promise<boolean> {
+  const subject = encodeURIComponent(env.GOOGLE_ADMIN_SUBJECT?.trim() ?? "");
+  const res = await directoryGet(`/users/${subject}?fields=primaryEmail`, token);
+  return res.status === "ok";
 }
 
 /**
@@ -164,17 +191,18 @@ export async function lookupGoogle(email: string, env: Env): Promise<GoogleResul
       "&fields=primaryEmail,name/fullName,suspended,archived,aliases,nonEditableAliases",
     token,
   );
-  if (user) {
-    const primaryEmail = String(user.primaryEmail ?? "");
-    const name = user.name as { fullName?: unknown } | undefined;
+  if (user.status === "ok") {
+    const u = user.body;
+    const primaryEmail = String(u.primaryEmail ?? "");
+    const name = u.name as { fullName?: unknown } | undefined;
     return {
       found: true,
       kind: primaryEmail.toLowerCase() === target ? "user" : "user-alias",
       primaryEmail,
       fullName: typeof name?.fullName === "string" ? name.fullName : null,
-      suspended: user.suspended === true,
-      archived: user.archived === true,
-      aliases: [...strings(user.aliases), ...strings(user.nonEditableAliases)],
+      suspended: u.suspended === true,
+      archived: u.archived === true,
+      aliases: [...strings(u.aliases), ...strings(u.nonEditableAliases)],
     };
   }
 
@@ -182,18 +210,27 @@ export async function lookupGoogle(email: string, env: Env): Promise<GoogleResul
     `/groups/${key}?fields=email,name,description,directMembersCount,aliases,nonEditableAliases`,
     token,
   );
-  if (group) {
-    const groupEmail = String(group.email ?? "");
-    const count = Number(group.directMembersCount);
+  if (group.status === "ok") {
+    const g = group.body;
+    const groupEmail = String(g.email ?? "");
+    const count = Number(g.directMembersCount);
     return {
       found: true,
       kind: groupEmail.toLowerCase() === target ? "group" : "group-alias",
       email: groupEmail,
-      name: typeof group.name === "string" ? group.name : null,
-      description: typeof group.description === "string" && group.description ? group.description : null,
+      name: typeof g.name === "string" ? g.name : null,
+      description: typeof g.description === "string" && g.description ? g.description : null,
       directMembersCount: Number.isFinite(count) ? count : null,
-      aliases: [...strings(group.aliases), ...strings(group.nonEditableAliases)],
+      aliases: [...strings(g.aliases), ...strings(g.nonEditableAliases)],
     };
+  }
+
+  // Neither a user nor a group here. A 403 (rather than 404) for the user
+  // means Google knows the address but it belongs to another customer, unless
+  // the directory is not readable at all, which is a setup error.
+  if (user.status === "forbidden") {
+    if (await directoryReadable(env, token)) return { found: false, outsideTenant: true };
+    throw user.error;
   }
 
   return { found: false };

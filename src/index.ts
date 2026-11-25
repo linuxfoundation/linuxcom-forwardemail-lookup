@@ -55,7 +55,13 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
       query: body.query,
       forwardemail: "error" in body.forwardemail ? "error" : body.forwardemail.found,
       google:
-        "error" in body.google ? "error" : body.google.found ? body.google.kind : false,
+        "error" in body.google
+          ? "error"
+          : body.google.found
+            ? body.google.kind
+            : "outsideTenant" in body.google
+              ? "outside-tenant"
+              : false,
       conflict: body.conflict,
     }),
   );
