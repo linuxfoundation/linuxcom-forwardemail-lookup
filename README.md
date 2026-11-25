@@ -123,3 +123,7 @@ Dependency and CI rules are in [AGENTS.md](AGENTS.md), which follows [package-ma
 - Upstream errors appear on that source's card. The Google 403 and token-exchange messages include the OAuth error code to help diagnose delegation setup.
 - **Google 403 for a single address.** Google returns 403 (not 404) when an address belongs to a Google account outside this Workspace. The app then checks groups, then whether the admin subject can read its own record. If it can, the card shows **Not in Workspace**, never a conflict. With the Cloud Identity scope, it also says whether the address is an **unmanaged personal account** (`isInvitableUser`) or something else. If the admin subject can't read its own record either, it's a setup problem and is shown as an error.
 - Any lookup with a non-200/404 Google call returns a `googleTrace` (shown under **Why?**) and logs a `google_trace` event with each call's step, HTTP status, timing and Google's full error response. Tokens are never logged.
+
+## License
+
+[MIT](LICENSE) © The Linux Foundation. The bundled Inter font in `public/fonts/` is under the SIL Open Font License 1.1 ([public/fonts/Inter-LICENSE.txt](public/fonts/Inter-LICENSE.txt)).

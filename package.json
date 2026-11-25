@@ -1,6 +1,7 @@
 {
   "name": "linuxcom-forwardemail-lookup",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --infer-origin-from-routes=false",
