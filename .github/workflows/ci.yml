@@ -87,8 +87,9 @@ jobs:
           version: "0.13.9"
           enable-cache: false
 
-      # zizmor pinned; bump manually (Dependabot can't see uvx pins).
-      - run: uvx zizmor==1.32.0 --persona=auditor --min-severity=low .
+      # zizmor comes from tools/uv.lock (hash-verified, Dependabot-managed).
+      - run: uv sync --frozen --project tools
+      - run: uv run --frozen --project tools zizmor --persona=auditor --min-severity=low .
 
   dependency-review:
     name: Dependency review

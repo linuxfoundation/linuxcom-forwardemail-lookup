@@ -23,7 +23,25 @@ updates:
       default-days: 7
       semver-major-days: 30
       semver-minor-days: 7
-      semver-patch-days: 3
+      semver-patch-days: 7   # never below the 7-day minimum
+
+  - package-ecosystem: "uv"
+    # CI-only Python tooling (zizmor) in tools/pyproject.toml + tools/uv.lock.
+    directory: "/tools"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 7   # never below the 7-day minimum
 
   - package-ecosystem: "github-actions"
     # Actions used in .github/workflows/ (all SHA-pinned with a

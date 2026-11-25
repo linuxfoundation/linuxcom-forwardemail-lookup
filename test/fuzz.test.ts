@@ -79,8 +79,18 @@ describe("/api/lookup (fuzz)", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const env = makeEnv(keys, { DEV_BYPASS_ACCESS: "1" });
 
+    // Hostile strings alone are almost never valid, so mix in valid local
+    // parts (bare, upper-cased with the domain, and on a wrong domain) to
+    // exercise the upstream path as hard as the rejection path.
+    const requestInput = fc.oneof(
+      hostile,
+      validLocal,
+      validLocal.map((l) => `${l.toUpperCase()}@Linux.COM`),
+      validLocal.map((l) => `${l}@example.com`),
+    );
+
     await fc.assert(
-      fc.asyncProperty(hostile, async (input) => {
+      fc.asyncProperty(requestInput, async (input) => {
         resetGoogleTokenCache();
         const calls = mockFetch({
           "https://oauth2.googleapis.com/token": () => jsonRes({ access_token: "t", expires_in: 3600 }),
@@ -95,13 +105,31 @@ describe("/api/lookup (fuzz)", () => {
         if (local === null) {
           expect(res.status).toBe(400);
           expect(calls).toHaveLength(0);
-        } else {
-          expect(res.status).toBe(200);
-          // Upstream URLs only ever carry the validated local part.
-          for (const c of calls.filter((r) => r.method === "GET")) {
-            expect(decodeURIComponent(new URL(c.url).pathname)).toContain(local);
-          }
+          return;
         }
+
+        // Exact answer: both providers were queried and both said not found
+        // (a provider error would show up here as `{ error }`).
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({
+          query: `${local}@linux.com`,
+          forwardemail: { found: false },
+          google: { found: false },
+          conflict: false,
+        });
+
+        // Exactly these upstream requests, each carrying only the encoded,
+        // validated address in its path.
+        const email = encodeURIComponent(`${local}@linux.com`);
+        const seen = calls.map((r) => `${r.method} ${new URL(r.url).origin}${new URL(r.url).pathname}`).sort();
+        expect(seen).toEqual(
+          [
+            "POST https://oauth2.googleapis.com/token",
+            `GET https://api.forwardemail.net/v1/domains/linux.com/aliases/${encodeURIComponent(local)}`,
+            `GET https://admin.googleapis.com/admin/directory/v1/users/${email}`,
+            `GET https://admin.googleapis.com/admin/directory/v1/groups/${email}`,
+          ].sort(),
+        );
       }),
       { numRuns: 300 },
     );

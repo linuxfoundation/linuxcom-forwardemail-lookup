@@ -19,10 +19,16 @@ in this repository. The two sections below are mandatory.
 - **Release-age cooldown:** enforced by the Dependabot `npm` and
   `github-actions` cooldowns in `.github/dependabot.yml`, *not* by
   `min-release-age` in `.npmrc` (which would also block Dependabot security
-  updates). Agents still must not add a version published in the last 7 days.
+  updates). Every update type waits at least 7 days (patch included; the
+  `semver-patch-days: 3` in the generic example below is overridden to 7
+  here). Agents still must not add a version published in the last 7 days.
 - **CI installs:** always `npm ci --ignore-scripts`, followed by
   `npm run lint:lockfile`, `npm audit signatures` and
   `npm audit --audit-level=moderate`.
+- **CI tooling outside npm:** zizmor is declared in `tools/pyproject.toml`,
+  hash-locked in `tools/uv.lock`, installed with `uv sync --frozen` and kept
+  current by Dependabot's `uv` ecosystem. Never install tools inline
+  (`uvx tool==x`, `pip install`, `npx --yes`).
 - **Fuzzing:** fast-check property tests in `test/fuzz.test.ts` cover the
   untrusted-input surface (`normalizeLocalPart` and `/api/lookup`).
 - **CodeQL:** runs via GitHub's CodeQL *default setup* (actions +
