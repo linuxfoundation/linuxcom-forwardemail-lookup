@@ -69,12 +69,13 @@ The deploy job fails early if any of these are missing. Every deploy pushes the 
 
 ### 3. Google Workspace service account (read-only)
 
-1. In a GCP project, enable the **Admin SDK API**.
+1. In a GCP project, enable the **Admin SDK API** and the **Cloud Identity** API (`cloudidentity.googleapis.com`).
 2. Create a **service account** and a **JSON key**, and save the key as the `GOOGLE_SA_KEY_JSON` secret. No GCP IAM roles are needed.
 3. In **Workspace Admin → Security → Access and data control → API controls → Domain-wide delegation**, add the service account's **client ID** with exactly these scopes:
    ```
-   https://www.googleapis.com/auth/admin.directory.user.readonly,https://www.googleapis.com/auth/admin.directory.group.readonly
+   https://www.googleapis.com/auth/admin.directory.user.readonly,https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/cloud-identity.userinvitations.readonly
    ```
+   The third scope is optional. It lets the app confirm that an address Google won't describe belongs to an **unmanaged personal account**. It uses its own token, so if it's missing only that check is skipped, and the skip shows in the card's **Why?** section as a `cloudidentity.token` 401 `unauthorized_client`.
 4. Choose the account the service account will impersonate and save it as the `GOOGLE_ADMIN_SUBJECT` secret. Best practice is a dedicated account that holds only a **custom admin role** with *Users → Read* and *Groups → Read*.
 
 Google lookups only match `@linux.com` addresses if `linux.com` is a primary, secondary or alias domain in the tenant. Aliases that come from a domain alias show up as `nonEditableAliases` and are reported as "Alias of a user". If you want to query a different domain, change `GOOGLE_LOOKUP_DOMAIN`.
@@ -110,3 +111,5 @@ npm test
 - ForwardEmail matching is **exact**. Catch-all (`*`) and regex aliases are not evaluated, so "Not found" means there is no explicit alias with that name.
 - Each lookup writes `{actor, query, forwardemail, google}` to Workers Logs (observability is enabled) as an audit trail. Recipients and secrets are never logged.
 - Upstream errors appear on that source's card. The Google 403 and token-exchange messages include the OAuth error code to help diagnose delegation setup.
+- **Google 403 for a single address.** Google returns 403 (not 404) when an address belongs to a Google account outside this Workspace. The app then checks groups, then whether the admin subject can read its own record. If it can, the card shows **Not in Workspace**, never a conflict. With the Cloud Identity scope, it also says whether the address is an **unmanaged personal account** (`isInvitableUser`) or something else. If the admin subject can't read its own record either, it's a setup problem and is shown as an error.
+- Any lookup with a non-200/404 Google call returns a `googleTrace` (shown under **Why?**) and logs a `google_trace` event with each call's step, HTTP status, timing and Google's full error response. Tokens are never logged.

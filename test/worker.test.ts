@@ -411,14 +411,93 @@ describe("Google Workspace lookup", () => {
         403,
       );
 
+    const CI = "https://cloudidentity.googleapis.com/v1/customers/";
+    const readableSubject = () => jsonRes({ primaryEmail: "readonly-admin@example.org", customerId: "C0abc123" });
+
     it("reports an account outside the tenant when the directory is readable", async () => {
       const calls = upstreams({
         [`${USERS}outsider%40linux.com`]: forbidden,
-        [SUBJECT]: () => jsonRes({ primaryEmail: "readonly-admin@example.org" }),
+        [SUBJECT]: readableSubject,
       });
       const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
-      expect(body.google).toEqual({ found: false, outsideTenant: true });
+      // No Cloud Identity route mocked: the check is unavailable, not fatal.
+      expect(body.google).toEqual({ found: false, outsideTenant: true, accountType: "unknown" });
       expect(calls.some((r) => r.url.startsWith(GROUPS))).toBe(true);
+    });
+
+    it("identifies an unmanaged personal account via Cloud Identity", async () => {
+      const scopes: string[] = [];
+      const calls = upstreams({
+        [TOKEN]: async (req) => {
+          const a = new URLSearchParams(await req.text()).get("assertion") ?? "";
+          const payload = JSON.parse(atob(a.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")));
+          scopes.push(payload.scope);
+          return jsonRes({ access_token: payload.scope.includes("cloud-identity") ? "ci-token" : "g-token", expires_in: 3600 });
+        },
+        [`${USERS}outsider%40linux.com`]: forbidden,
+        [SUBJECT]: readableSubject,
+        [CI]: () => jsonRes({ isInvitableUser: true }),
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({ found: false, outsideTenant: true, accountType: "unmanaged" });
+
+      // Separate token so a missing delegation for this scope can't break lookups.
+      expect(scopes).toEqual([
+        "https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/admin.directory.group.readonly",
+        "https://www.googleapis.com/auth/cloud-identity.userinvitations.readonly",
+      ]);
+      const ci = calls.find((r) => r.url.startsWith(CI))!;
+      expect(new URL(ci.url).pathname).toBe("/v1/customers/C0abc123/userinvitations/outsider%40linux.com:isInvitableUser");
+      expect(ci.headers.get("authorization")).toBe("Bearer ci-token");
+    });
+
+    it("reports 'other' when the account is not invitable", async () => {
+      upstreams({
+        [`${USERS}outsider%40linux.com`]: forbidden,
+        [SUBJECT]: readableSubject,
+        [CI]: () => jsonRes({}),
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({ found: false, outsideTenant: true, accountType: "other" });
+    });
+
+    it("falls back to 'unknown' and traces why when the scope isn't delegated", async () => {
+      upstreams({
+        [TOKEN]: async (req) => {
+          const a = new URLSearchParams(await req.text()).get("assertion") ?? "";
+          return a && atob(a.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")).includes("cloud-identity")
+            ? jsonRes({ error: "unauthorized_client", error_description: "Client is unauthorized to retrieve access tokens using this method" }, 401)
+            : jsonRes({ access_token: "g-token", expires_in: 3600 });
+        },
+        [`${USERS}outsider%40linux.com`]: forbidden,
+        [SUBJECT]: readableSubject,
+      });
+      const body = (await (await authed("/api/lookup?user=outsider")).json()) as Record<string, any>;
+      expect(body.google).toEqual({ found: false, outsideTenant: true, accountType: "unknown" });
+      expect(body.googleTrace.map((s: any) => [s.step, s.status])).toEqual([
+        ["users.get", 403],
+        ["groups.get", 404],
+        ["self-check", 200],
+        ["cloudidentity.token", 401],
+      ]);
+      expect(body.googleTrace[0].error).toMatchObject({ message: "Not Authorized to access this resource/api" });
+      expect(body.googleTrace[3].error).toMatchObject({ error: "unauthorized_client" });
+    });
+
+    it("logs a google_trace event for unusual lookups only", async () => {
+      const log = vi.mocked(console.log);
+      upstreams({ [`${USERS}outsider%40linux.com`]: forbidden, [SUBJECT]: readableSubject, [CI]: () => jsonRes({ isInvitableUser: true }) });
+      await authed("/api/lookup?user=outsider");
+      const traces = log.mock.calls.map((c) => JSON.parse(String(c[0]))).filter((e) => e.event === "google_trace");
+      expect(traces).toHaveLength(1);
+      expect(traces[0]).toMatchObject({ query: "outsider@linux.com", outcome: "outside-tenant:unmanaged", actor: "staff@linuxfoundation.org" });
+      expect(traces[0].steps.map((s: any) => s.step)).toEqual(["users.get", "groups.get", "self-check", "cloudidentity.isInvitableUser"]);
+
+      log.mockClear();
+      upstreams();
+      const plain = (await (await authed("/api/lookup?user=nobody")).json()) as Record<string, any>;
+      expect(plain.googleTrace).toBeUndefined();
+      expect(log.mock.calls.some((c) => String(c[0]).includes("google_trace"))).toBe(false);
     });
 
     it("never flags a conflict for an outside-tenant account", async () => {

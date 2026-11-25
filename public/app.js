@@ -71,8 +71,27 @@ function renderCard(id, result, describe) {
     badge.textContent = "Not found";
     if (result.outsideTenant) {
       badge.textContent = "Not in Workspace";
-      row(dl, "Details", "A Google account outside this Workspace uses this address (an unmanaged personal or conflicting account). It does not receive this domain's mail.");
-      row(dl, "Where to look", "Admin console → Directory → Unmanaged users");
+      const OUTSIDE = {
+        unmanaged: [
+          "Unmanaged personal account",
+          "A personal Google account uses this address as its login. It can be invited to become a managed Workspace account.",
+          "Admin console → Directory → Unmanaged users → Personal accounts",
+        ],
+        other: [
+          "Google account outside this Workspace",
+          "Google knows this address but it isn't an unmanaged account on our domains (e.g. it belongs to another organization or is a conflicting account).",
+          "Admin console → Directory → Unmanaged users → Manage conflicting accounts",
+        ],
+        unknown: [
+          "Google account outside this Workspace",
+          "Most likely an unmanaged personal account. The Cloud Identity check that would confirm it is unavailable (see Why?).",
+          "Admin console → Directory → Unmanaged users",
+        ],
+      };
+      const [type, details, where] = OUTSIDE[result.accountType] || OUTSIDE.unknown;
+      row(dl, "Type", type);
+      row(dl, "Details", `${details} It does not receive this domain's mail.`);
+      row(dl, "Where to look", where);
     }
     return;
   }
@@ -113,6 +132,40 @@ function describeGoogle(r, badge, dl) {
     row(dl, "Description", r.description);
   }
   row(dl, "Aliases", r.aliases);
+}
+
+// Every Google API call behind an unusual answer (403s, errors, skipped
+// checks), with Google's own error response, in a collapsible section.
+function renderTrace(card, steps) {
+  card.querySelector(".trace")?.remove();
+  if (!Array.isArray(steps) || !steps.length) return;
+
+  const details = document.createElement("details");
+  details.className = "trace";
+  const summary = document.createElement("summary");
+  summary.textContent = "Why?";
+  const list = document.createElement("ol");
+  for (const s of steps) {
+    const li = document.createElement("li");
+    const head = document.createElement("div");
+    head.className = "trace-head";
+    const name = document.createElement("code");
+    name.textContent = s.step;
+    const status = document.createElement("span");
+    const ok = s.status === 200 || s.status === 404;
+    status.className = `trace-status ${ok ? "ok" : "bad"}`;
+    status.textContent = `${s.status}${typeof s.ms === "number" ? ` · ${s.ms} ms` : ""}`;
+    head.append(name, status);
+    li.append(head);
+    if (s.error !== undefined) {
+      const pre = document.createElement("pre");
+      pre.textContent = typeof s.error === "string" ? s.error : JSON.stringify(s.error, null, 2);
+      li.append(pre);
+    }
+    list.append(li);
+  }
+  details.append(summary, list);
+  card.append(details);
 }
 
 // Google Workspace routing rules take priority over ForwardEmail for this
@@ -159,6 +212,7 @@ async function lookup(event) {
     $("query").textContent = data.query;
     renderCard("card-fe", data.forwardemail, describeFe);
     renderCard("card-google", data.google, describeGoogle);
+    renderTrace($("card-google"), data.googleTrace);
     renderConflict(data);
     $("results").hidden = false;
     setStatus("");

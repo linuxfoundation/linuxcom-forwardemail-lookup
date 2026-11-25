@@ -1,7 +1,7 @@
 import { AuthError, requireAccess } from "./access";
 import { PublicError, type Env } from "./env";
 import { lookupForwardEmail } from "./forwardemail";
-import { lookupGoogle } from "./google";
+import { lookupGoogle, type TraceStep } from "./google";
 import { normalizeLocalPart } from "./validate";
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -29,13 +29,27 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
     return json({ error: `Enter a valid address on ${env.FE_DOMAIN}` }, 400);
   }
 
+  const googleTrace: TraceStep[] = [];
   const [fe, google] = await Promise.allSettled([
     lookupForwardEmail(local, env),
-    lookupGoogle(`${local}@${env.GOOGLE_LOOKUP_DOMAIN}`, env),
+    lookupGoogle(`${local}@${env.GOOGLE_LOOKUP_DOMAIN}`, env, googleTrace),
   ]);
 
   const forwardemail = settled(fe, "forwardemail");
   const googleResult = settled(google, "google");
+  const googleOutcome =
+    "error" in googleResult
+      ? "error"
+      : googleResult.found
+        ? googleResult.kind
+        : "outsideTenant" in googleResult
+          ? `outside-tenant:${googleResult.accountType}`
+          : "not-found";
+
+  // Anything other than plain found / not-found answers (a 403, an error, a
+  // skipped check) gets its full call trace, in the logs and the response.
+  const unusual = googleTrace.some((s) => s.status !== 200 && s.status !== 404);
+
   const body = {
     query: `${local}@${env.FE_DOMAIN}`,
     forwardemail,
@@ -45,6 +59,7 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
     conflict:
       !("error" in forwardemail) && forwardemail.found &&
       !("error" in googleResult) && googleResult.found,
+    ...(unusual ? { googleTrace } : {}),
   };
 
   // Audit trail in Workers Logs. No recipients or secrets.
@@ -54,17 +69,13 @@ async function handleLookup(url: URL, env: Env, actor: string): Promise<Response
       actor,
       query: body.query,
       forwardemail: "error" in body.forwardemail ? "error" : body.forwardemail.found,
-      google:
-        "error" in body.google
-          ? "error"
-          : body.google.found
-            ? body.google.kind
-            : "outsideTenant" in body.google
-              ? "outside-tenant"
-              : false,
+      google: googleOutcome,
       conflict: body.conflict,
     }),
   );
+  if (unusual) {
+    console.log(JSON.stringify({ event: "google_trace", actor, query: body.query, outcome: googleOutcome, steps: googleTrace }));
+  }
 
   return json(body);
 }
