@@ -4,61 +4,113 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>linux.com Address Lookup</title>
+    <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <header class="bar">
-      <h1>linux.com address lookup</h1>
-      <span id="whoami" class="muted" aria-live="polite"></span>
-    </header>
-
-    <main>
-      <form id="lookup" autocomplete="off" novalidate>
-        <label for="user" class="sr-only">Address</label>
-        <div class="field">
-          <input
-            id="user"
-            name="user"
-            type="text"
-            inputmode="email"
-            spellcheck="false"
-            autocapitalize="none"
-            placeholder="username"
-            maxlength="80"
-            required
-            autofocus
-          />
-          <span class="suffix" id="suffix">@linux.com</span>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2.5" />
+            <rect x="3" y="3" width="9" height="9" fill="currentColor" />
+          </svg>
+          <span class="brand-name">Address Lookup</span>
         </div>
-        <button type="submit" id="go">Look up</button>
-      </form>
 
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+        <div class="user-card">
+          <span class="avatar" id="avatar" aria-hidden="true">·</span>
+          <div class="user-text">
+            <div class="user-name" id="user-name">Signed in</div>
+            <div class="user-email" id="whoami"></div>
+          </div>
+        </div>
 
-      <section id="results" class="results" hidden>
-        <h2 id="query" class="query"></h2>
-        <div id="conflict" class="warning" role="alert" hidden>
-          <strong>Exists in both ForwardEmail and Google Workspace.</strong>
-          <span id="conflict-text"></span>
+        <nav class="nav" aria-label="Main">
+          <div class="nav-label">Email</div>
+          <a class="nav-item active" href="/" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            Address lookup
+          </a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <a class="nav-item" id="signout" href="/cdn-cgi/access/logout">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
+            Sign out
+          </a>
         </div>
-        <div class="cards">
-          <article class="card" id="card-fe">
-            <header>
-              <h3>ForwardEmail</h3>
-              <span class="badge" data-role="badge"></span>
-            </header>
-            <dl data-role="details"></dl>
-          </article>
-          <article class="card" id="card-google">
-            <header>
-              <h3>Google Workspace</h3>
-              <span class="badge" data-role="badge"></span>
-            </header>
-            <dl data-role="details"></dl>
-          </article>
-        </div>
-      </section>
-    </main>
+      </aside>
+
+      <main class="main">
+        <header class="page-head">
+          <h1>Address lookup</h1>
+          <p class="subtitle">Check whether an address exists in ForwardEmail and Google Workspace.</p>
+        </header>
+
+        <section class="section">
+          <h2 class="section-title">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+            Search
+          </h2>
+          <div class="panel">
+            <form id="lookup" autocomplete="off" novalidate>
+              <label for="user" class="sr-only">Address</label>
+              <div class="field">
+                <input
+                  id="user"
+                  name="user"
+                  type="text"
+                  inputmode="email"
+                  spellcheck="false"
+                  autocapitalize="none"
+                  placeholder="username"
+                  maxlength="80"
+                  required
+                  autofocus
+                />
+                <span class="suffix" id="suffix">@linux.com</span>
+              </div>
+              <button type="submit" id="go" class="btn btn-primary">Look up</button>
+            </form>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="section" id="results" hidden>
+          <h2 class="section-title">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M22 20H2" /></svg>
+            Results
+            <span class="chip" id="query"></span>
+          </h2>
+
+          <div id="conflict" class="warning" role="alert" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+            <div>
+              <strong>Exists in both ForwardEmail and Google Workspace.</strong>
+              <span id="conflict-text"></span>
+            </div>
+          </div>
+
+          <div class="cards">
+            <article class="card" id="card-fe">
+              <header class="card-head">
+                <h3>ForwardEmail</h3>
+                <span class="badge" data-role="badge"></span>
+              </header>
+              <dl data-role="details"></dl>
+            </article>
+            <article class="card" id="card-google">
+              <header class="card-head">
+                <h3>Google Workspace</h3>
+                <span class="badge" data-role="badge"></span>
+              </header>
+              <dl data-role="details"></dl>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
   </body>
 </html>

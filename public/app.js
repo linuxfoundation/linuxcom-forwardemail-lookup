@@ -167,12 +167,44 @@ async function lookup(event) {
   }
 }
 
+function initials(name, email) {
+  const words = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (email || "?").slice(0, 2).toUpperCase();
+}
+
+function showUser(name, email) {
+  $("user-name").textContent = name || email.split("@")[0];
+  $("whoami").textContent = email;
+  $("avatar").textContent = initials(name, email);
+}
+
+// Cloudflare Access exposes the IdP identity (including the Okta display
+// name) on the app's own origin. Best effort: fall back to the email.
+async function loadDisplayName(email) {
+  try {
+    const res = await fetch("/cdn-cgi/access/get-identity", { credentials: "same-origin" });
+    if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return;
+    const id = await res.json();
+    const name = typeof id.name === "string" ? id.name.trim() : "";
+    if (name) showUser(name, email);
+  } catch {
+    /* keep the email-based fallback */
+  }
+}
+
 async function init() {
   $("lookup").addEventListener("submit", lookup);
 
+  // Signing out ends the Cloudflare Access session for this app. There is no
+  // Access session when running under `wrangler dev`.
+  if (["localhost", "127.0.0.1"].includes(location.hostname)) $("signout").hidden = true;
+
   try {
     const me = await api("/api/me");
-    $("whoami").textContent = me.email;
+    showUser("", me.email);
+    loadDisplayName(me.email);
     $("suffix").textContent = `@${me.domain}`;
     document.title = `${me.domain} Address Lookup`;
   } catch (err) {
