@@ -91,8 +91,7 @@ svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; s
 }
 
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px; }
-.brand-mark { width: 26px; height: 26px; stroke-width: 0; }
-.brand-mark rect:first-child { stroke-width: 2.5; }
+.brand-mark { width: 24px; height: 24px; fill: currentColor; stroke: none; }
 .brand-name { font-weight: 600; font-size: 15px; letter-spacing: 0.01em; }
 
 .user-card {
