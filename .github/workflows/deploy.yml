@@ -14,16 +14,34 @@ concurrency:
 
 jobs:
   test:
-    uses: ./.github/workflows/ci.yml
+    name: test
+    # Self-repository syntax: always this repo's file at this commit, never
+    # something on the runner's filesystem (zizmor: self-repository).
+    uses: $/.github/workflows/ci.yml
 
   deploy:
+    name: deploy
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     # Secrets are passed only to the two steps that need them (never at job
     # level), so checkout, setup-node and the dependency install never see
     # the Google service-account key or the API tokens.
     steps:
+      # Audit mode while the egress allowlist is confirmed; tighten to
+      # `block` afterwards. (Runtime monitoring needs a StepSecurity plan on
+      # private repos; free once the repo is public.)
+      - uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            api.cloudflare.com:443
+
       - name: Check required secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -53,10 +71,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # No dependency cache in the deploy job: a poisoned cache could alter
+      # what gets deployed (zizmor: cache-poisoning).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
       # --ignore-scripts: no dependency lifecycle scripts run in CI.
       - run: npm ci --ignore-scripts
 
@@ -75,6 +95,7 @@ jobs:
             GOOGLE_SA_KEY_JSON
           command: deploy --domain ${{ secrets.WORKER_HOSTNAME }}
         env:
+          WRANGLER_SEND_METRICS: "false"
           ACCESS_TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
           ACCESS_AUD: ${{ secrets.ACCESS_AUD }}
           GOOGLE_ADMIN_SUBJECT: ${{ secrets.GOOGLE_ADMIN_SUBJECT }}

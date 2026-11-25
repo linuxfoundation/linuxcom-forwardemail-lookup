@@ -93,7 +93,7 @@ Once all eight secrets are set, merge to `main` (or run **Deploy** manually). Th
 ## Local development
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 cp .dev.vars.example .dev.vars   # fill in FORWARDEMAIL_API_TOKEN / GOOGLE_SA_KEY_JSON
 npm run dev                      # http://localhost:8787 (keeps the real localhost origin)
 ```
@@ -102,8 +102,18 @@ npm run dev                      # http://localhost:8787 (keeps the real localho
 
 ```bash
 npm run typecheck
-npm test
+npm test               # unit tests + fast-check fuzzing (test/fuzz.test.ts)
+npm run lint:lockfile
 ```
+
+## Supply-chain security
+
+Dependency and CI rules are in [AGENTS.md](AGENTS.md), which follows [package-manager-hardening](https://github.com/jordanconway/package-manager-hardening). How to report a vulnerability is in [SECURITY.md](SECURITY.md). In short:
+
+- **Dependencies:** exact pins, committed lockfile, `npm ci --ignore-scripts`, lockfile-lint, `npm audit signatures`, `npm audit`.
+- **Updates:** a 7-day Dependabot cooldown.
+- **Workflows:** SHA-pinned actions with Harden-Runner, zizmor (auditor persona) and dependency review on PRs.
+- **Code scanning:** CodeQL default setup.
 
 ## Behavior notes
 
