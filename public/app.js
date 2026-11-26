@@ -22,15 +22,26 @@ async function api(path) {
   return body;
 }
 
+// "Reload to sign in again": a real full-page reload, so an expired
+// Cloudflare Access session is sent back through sign-in. A plain link to the
+// same URL + #fragment would only do same-document navigation.
+function reloadLink() {
+  const a = document.createElement("a");
+  a.href = location.href;
+  a.textContent = "Reload to sign in again";
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    location.reload();
+  });
+  return a;
+}
+
 function setStatus(text, kind = "", withReload = false) {
   const el = $("status");
   el.className = `status ${kind}`.trim();
   el.textContent = text;
   if (withReload) {
-    const a = document.createElement("a");
-    a.href = location.pathname;
-    a.textContent = "Reload to sign in again";
-    el.append(" ", a);
+    el.append(" ", reloadLink());
   }
 }
 
@@ -286,10 +297,7 @@ function setSweepStatus(text, kind = "", withReload = false) {
   el.className = `status ${kind}`.trim();
   el.textContent = text;
   if (withReload) {
-    const a = document.createElement("a");
-    a.href = location.pathname + location.hash;
-    a.textContent = "Reload to sign in again";
-    el.append(" ", a);
+    el.append(" ", reloadLink());
   }
 }
 
