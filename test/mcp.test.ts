@@ -128,6 +128,33 @@ describe("/mcp protocol", () => {
     const same = await rpc({ jsonrpc: "2.0", id: 1, method: "ping" }, { origin: HOST });
     expect(same.status).toBe(200);
   });
+
+  it.each(["null", "not a url", "://"])("rejects an unparseable Origin (%j) with 403 instead of throwing", async (origin) => {
+    upstreams();
+    const res = await rpc({ jsonrpc: "2.0", id: 1, method: "ping" }, { origin });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as any).error.code).toBe(-32600);
+  });
+
+  it.each([[{}], [[1]], [null], [true], [Number.NaN]])("rejects request id %j before dispatching", async (badId) => {
+    const calls = upstreams();
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: badId,
+      method: "tools/call",
+      params: { name: "lookup_linux_com_address", arguments: { address: "jdoe" } },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ jsonrpc: "2.0", id: null, error: { code: -32600 } });
+    // Nothing reached ForwardEmail or Google.
+    expect(calls.filter((c) => !c.url.startsWith(CERTS))).toHaveLength(0);
+  });
+
+  it("accepts string and numeric ids and echoes them back", async () => {
+    upstreams();
+    expect(((await (await rpc({ jsonrpc: "2.0", id: "abc", method: "ping" })).json()) as any).id).toBe("abc");
+    expect(((await (await rpc({ jsonrpc: "2.0", id: 0, method: "ping" })).json()) as any).id).toBe(0);
+  });
 });
 
 describe("/mcp tools", () => {

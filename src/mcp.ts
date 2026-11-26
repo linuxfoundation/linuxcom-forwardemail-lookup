@@ -152,6 +152,22 @@ async function callTool(params: Record<string, unknown>, env: Env, actor: string
   return null; // unknown tool
 }
 
+/**
+ * Same-origin check for the Origin header. Anything that isn't a URL with
+ * our host, including the literal "null" sent by sandboxed / opaque origins,
+ * is not allowed.
+ */
+function isSameOrigin(origin: string, requestUrl: string): boolean {
+  try {
+    return new URL(origin).host === new URL(requestUrl).host;
+  } catch {
+    return false;
+  }
+}
+
+const isValidId = (id: unknown): id is string | number =>
+  typeof id === "string" || (typeof id === "number" && Number.isFinite(id));
+
 /** Handles one MCP request. `actor` is the Access-verified identity. */
 export async function handleMcp(req: Request, env: Env, actor: string): Promise<Response> {
   if (req.method !== "POST") {
@@ -162,7 +178,7 @@ export async function handleMcp(req: Request, env: Env, actor: string): Promise<
   // DNS-rebinding guard from the MCP spec: browsers send Origin; only accept
   // our own. Non-browser MCP clients usually omit it.
   const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== new URL(req.url).host) {
+  if (origin !== null && !isSameOrigin(origin, req.url)) {
     return rpcError(null, -32600, "Origin not allowed", 403);
   }
 
@@ -185,7 +201,10 @@ export async function handleMcp(req: Request, env: Env, actor: string): Promise<
 
   const isNotification = !("id" in m) || m.id === undefined;
   if (isNotification) return new Response(null, { status: 202 });
-  const id = m.id as JsonRpcId;
+  // MCP request IDs must be a string or a number, never null or an object;
+  // reject anything else before dispatching (so nothing reaches a provider).
+  if (!isValidId(m.id)) return rpcError(null, -32600, "Invalid request: id must be a string or number", 400);
+  const id = m.id;
   const params = (m.params ?? {}) as Record<string, unknown>;
 
   switch (m.method) {
