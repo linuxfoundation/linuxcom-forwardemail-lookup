@@ -67,6 +67,7 @@ export function makeEnv(keys: Keys, overrides: Partial<Env> = {}): Env {
     ASSETS: { fetch: async () => new Response("asset") } as unknown as Fetcher,
     FE_DOMAIN: "linux.com",
     GOOGLE_LOOKUP_DOMAIN: "linux.com",
+    SWEEP_GOOGLE_DOMAIN: "linuxfoundation.org",
     ACCESS_TEAM_DOMAIN: TEAM,
     ACCESS_AUD: AUD,
     GOOGLE_ADMIN_SUBJECT: "readonly-admin@example.org",

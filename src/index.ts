@@ -2,7 +2,25 @@ import { AuthError, requireAccess } from "./access";
 import { PublicError, type Env } from "./env";
 import { lookupForwardEmail } from "./forwardemail";
 import { lookupGoogle, type TraceStep } from "./google";
+import { runSweep } from "./sweep";
 import { normalizeLocalPart } from "./validate";
+
+/**
+ * Org-wide sweep: active Google users' @SWEEP_GOOGLE_DOMAIN addresses that
+ * also exist as ForwardEmail aliases on FE_DOMAIN. Returns the whole report;
+ * the page renders it and builds the CSV.
+ */
+async function handleSweep(env: Env, actor: string): Promise<Response> {
+  try {
+    const report = await runSweep(env);
+    // Audit trail: who ran it and the counts (no addresses or recipients).
+    console.log(JSON.stringify({ event: "sweep", actor, ...report.stats }));
+    return json(report);
+  } catch (err) {
+    console.error(JSON.stringify({ event: "sweep_error", actor, message: (err as Error)?.message }));
+    return json({ error: err instanceof PublicError ? err.message : "Unexpected error" }, 502);
+  }
+}
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -103,6 +121,8 @@ export default {
         return json({ email: actor, domain: env.FE_DOMAIN });
       case "/api/lookup":
         return handleLookup(url, env, actor);
+      case "/api/sweep":
+        return handleSweep(env, actor);
       default:
         return json({ error: "Not found" }, 404);
     }

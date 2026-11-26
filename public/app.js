@@ -253,8 +253,202 @@ async function loadDisplayName(email) {
   }
 }
 
+// ---------- Views (hash routing: #/lookup, #/sweep) ----------
+
+const VIEWS = { lookup: "Address Lookup", sweep: "Org Sweep" };
+
+function currentView() {
+  const v = location.hash.replace(/^#\/?/, "");
+  return Object.hasOwn(VIEWS, v) ? v : "lookup";
+}
+
+function showView() {
+  const view = currentView();
+  for (const panel of document.querySelectorAll("[data-view-panel]")) {
+    panel.hidden = panel.dataset.viewPanel !== view;
+  }
+  for (const link of document.querySelectorAll(".nav-item[data-view]")) {
+    const active = link.dataset.view === view;
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  document.title = `linux.com ${VIEWS[view]}`;
+  if (view === "lookup") $("user").focus();
+}
+
+// ---------- Org sweep ----------
+
+let sweepReport = null;
+
+function setSweepStatus(text, kind = "", withReload = false) {
+  const el = $("sweep-status");
+  el.className = `status ${kind}`.trim();
+  el.textContent = text;
+  if (withReload) {
+    const a = document.createElement("a");
+    a.href = location.pathname + location.hash;
+    a.textContent = "Reload to sign in again";
+    el.append(" ", a);
+  }
+}
+
+function stat(label, value, tone = "") {
+  const div = document.createElement("div");
+  div.className = `stat ${tone}`.trim();
+  const v = document.createElement("div");
+  v.className = "stat-value";
+  v.textContent = String(value);
+  const l = document.createElement("div");
+  l.className = "stat-label";
+  l.textContent = label;
+  div.append(v, l);
+  return div;
+}
+
+function cell(tr, ...nodes) {
+  const td = document.createElement("td");
+  for (const n of nodes) td.append(n);
+  tr.append(td);
+  return td;
+}
+
+function text(t, cls) {
+  const s = document.createElement("div");
+  if (cls) s.className = cls;
+  s.textContent = t;
+  return s;
+}
+
+function pill(t, tone) {
+  const s = document.createElement("span");
+  s.className = `pill ${tone}`;
+  s.textContent = t;
+  return s;
+}
+
+function sweepRowsShown() {
+  if (!sweepReport) return [];
+  const q = $("sweep-filter").value.trim().toLowerCase();
+  const elsewhereOnly = $("sweep-elsewhere").checked;
+  return sweepReport.matches.filter((m) => {
+    if (elsewhereOnly && m.forwardsToUser) return false;
+    if (!q) return true;
+    return [m.googleUser, m.googleName, m.googleAddress, m.forwardEmailAlias, m.orgUnit, ...m.forwardEmailRecipients]
+      .some((v) => v && String(v).toLowerCase().includes(q));
+  });
+}
+
+function renderSweepRows() {
+  const rows = sweepRowsShown();
+  const tbody = $("sweep-rows");
+  tbody.replaceChildren();
+  for (const m of rows) {
+    const tr = document.createElement("tr");
+    cell(tr, text(m.googleName || "—", "strong"), text(m.googleUser, "sub"));
+    cell(tr, text(m.googleAddress), pill(m.addressType === "primary" ? "Primary" : "Alias", "neutral"));
+    const alias = cell(tr, text(m.forwardEmailAlias));
+    if (m.forwardEmailEnabled === false) alias.append(pill("Disabled", "neutral"));
+    const fwd = cell(tr);
+    if (m.forwardEmailRecipients.length) for (const r of m.forwardEmailRecipients) fwd.append(text(r));
+    else fwd.append(text("—", "sub"));
+    cell(tr, m.forwardsToUser ? pill("Yes", "ok") : pill("No — elsewhere", "warn"));
+    cell(tr, text(m.orgUnit || "—", "sub"));
+    tbody.append(tr);
+  }
+  const total = sweepReport ? sweepReport.matches.length : 0;
+  $("sweep-count").textContent = rows.length === total ? `${total} rows` : `${rows.length} of ${total} rows`;
+  $("sweep-empty").hidden = rows.length > 0;
+}
+
+function renderSweep(report) {
+  sweepReport = report;
+  const s = report.stats;
+  for (const el of document.querySelectorAll(".sweep-gdomain")) el.textContent = `@${report.googleDomain}`;
+  for (const el of document.querySelectorAll(".sweep-fdomain")) el.textContent = `@${report.forwardEmailDomain}`;
+  $("sweep-generated").textContent = new Date(report.generatedAt).toLocaleString();
+  $("sweep-stats").replaceChildren(
+    stat("Active Google accounts", s.activeGoogleUsers),
+    stat(`@${report.googleDomain} addresses checked`, s.googleAddressesChecked),
+    stat(`${report.forwardEmailDomain} aliases`, s.forwardEmailAliases),
+    stat("Matches", s.matches, s.matches ? "accent" : ""),
+    stat("Forwarding elsewhere", s.matchesForwardingElsewhere, s.matchesForwardingElsewhere ? "warn" : ""),
+  );
+  const notes = [];
+  if (s.forwardEmailAliasesSkipped) {
+    notes.push(`${s.forwardEmailAliasesSkipped} catch-all/regex ForwardEmail aliases can't be matched by name and were not compared.`);
+  }
+  if (s.forwardEmailReportedTotal !== null && s.forwardEmailReportedTotal !== s.forwardEmailAliases) {
+    notes.push(`ForwardEmail reported ${s.forwardEmailReportedTotal} aliases but ${s.forwardEmailAliases} were read; the report may be incomplete.`);
+  }
+  notes.push(`Took ${(s.durationMs / 1000).toFixed(1)} s (${s.googlePages} Google pages, ${s.forwardEmailPages} ForwardEmail pages).`);
+  $("sweep-note").textContent = notes.join(" ");
+  $("sweep-results").hidden = false;
+  $("sweep-csv").disabled = false;
+  renderSweepRows();
+}
+
+async function runSweep() {
+  $("sweep-run").disabled = true;
+  $("sweep-csv").disabled = true;
+  setSweepStatus("Running sweep… reading every active Google account and every linux.com alias. This can take a minute.", "busy");
+  try {
+    renderSweep(await api("/api/sweep"));
+    setSweepStatus("");
+  } catch (err) {
+    setSweepStatus(err.message, "error", err instanceof SessionError);
+    $("sweep-csv").disabled = !sweepReport;
+  } finally {
+    $("sweep-run").disabled = false;
+  }
+}
+
+// CSV with every cell quoted. Cells that a spreadsheet would treat as a
+// formula (leading = + - @ tab CR) are prefixed with ' (CSV injection).
+function csvCell(v) {
+  let s = v === null || v === undefined ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function sweepCsv(report) {
+  const header = [
+    "google_account", "google_name", "org_unit", "matching_address", "address_type",
+    "linux_com_alias", "alias_enabled", "forwards_to", "forwards_to_this_user", "alias_description", "alias_labels",
+  ];
+  const lines = [header.map(csvCell).join(",")];
+  for (const m of report.matches) {
+    lines.push([
+      m.googleUser, m.googleName, m.orgUnit, m.googleAddress, m.addressType,
+      m.forwardEmailAlias, m.forwardEmailEnabled === null ? "" : m.forwardEmailEnabled ? "yes" : "no",
+      m.forwardEmailRecipients.join("; "), m.forwardsToUser ? "yes" : "no",
+      m.forwardEmailDescription, m.forwardEmailLabels.join("; "),
+    ].map(csvCell).join(","));
+  }
+  return lines.join("\r\n") + "\r\n";
+}
+
+function downloadSweepCsv() {
+  if (!sweepReport) return;
+  const blob = new Blob(["﻿", sweepCsv(sweepReport)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `linuxcom-org-sweep-${sweepReport.generatedAt.slice(0, 10)}.csv`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function init() {
   $("lookup").addEventListener("submit", lookup);
+  $("sweep-run").addEventListener("click", runSweep);
+  $("sweep-csv").addEventListener("click", downloadSweepCsv);
+  $("sweep-filter").addEventListener("input", renderSweepRows);
+  $("sweep-elsewhere").addEventListener("change", renderSweepRows);
+  window.addEventListener("hashchange", showView);
+  showView();
 
   // Signing out ends the Cloudflare Access session for this app. There is no
   // Access session when running under `wrangler dev`.
@@ -265,7 +459,6 @@ async function init() {
     showUser("", me.email);
     loadDisplayName(me.email);
     $("suffix").textContent = `@${me.domain}`;
-    document.title = `${me.domain} Address Lookup`;
   } catch (err) {
     setStatus(err.message, "error", err instanceof SessionError);
     return;

@@ -26,6 +26,7 @@
   // see README.md.
   "vars": {
     "FE_DOMAIN": "linux.com",
-    "GOOGLE_LOOKUP_DOMAIN": "linux.com"
+    "GOOGLE_LOOKUP_DOMAIN": "linux.com",
+    "SWEEP_GOOGLE_DOMAIN": "linuxfoundation.org"
   }
 }

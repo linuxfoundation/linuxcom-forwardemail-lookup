@@ -17,7 +17,7 @@
             <path d="M0 0H100V100H66V80H80V20H20V32H0Z" />
             <path d="M0 40H20V80H58V100H0Z" />
           </svg>
-          <span class="brand-name">Address Lookup</span>
+          <span class="brand-name">linux.com Lookup</span>
         </div>
 
         <div class="user-card">
@@ -30,9 +30,13 @@
 
         <nav class="nav" aria-label="Main">
           <div class="nav-label">Email</div>
-          <a class="nav-item active" href="/" aria-current="page">
+          <a class="nav-item" href="#/lookup" data-view="lookup">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             Address lookup
+          </a>
+          <a class="nav-item" href="#/sweep" data-view="sweep">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h12" /><circle cx="19" cy="18" r="2" /></svg>
+            Org sweep
           </a>
         </nav>
 
@@ -45,6 +49,7 @@
       </aside>
 
       <main class="main">
+        <div id="view-lookup" data-view-panel="lookup">
         <header class="page-head">
           <h1>Address lookup</h1>
           <p class="subtitle">Check whether an address exists in ForwardEmail and Google Workspace.</p>
@@ -111,6 +116,70 @@
             </article>
           </div>
         </section>
+        </div>
+
+        <div id="view-sweep" data-view-panel="sweep" hidden>
+          <header class="page-head">
+            <h1>Org sweep</h1>
+            <p class="subtitle">
+              Active Google Workspace accounts whose <span class="sweep-gdomain">@linuxfoundation.org</span> address or
+              alias also exists as a ForwardEmail <span class="sweep-fdomain">@linux.com</span> alias.
+            </p>
+          </header>
+
+          <section class="section">
+            <h2 class="section-title">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h12" /><circle cx="19" cy="18" r="2" /></svg>
+              Run
+            </h2>
+            <div class="panel sweep-actions">
+              <button type="button" id="sweep-run" class="btn btn-primary">Run sweep</button>
+              <button type="button" id="sweep-csv" class="btn btn-secondary" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+                Download CSV
+              </button>
+              <p id="sweep-status" class="status" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+
+          <section class="section" id="sweep-results" hidden>
+            <h2 class="section-title">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M22 20H2" /></svg>
+              Report
+              <span class="chip" id="sweep-generated"></span>
+            </h2>
+
+            <div class="stats" id="sweep-stats"></div>
+
+            <div class="table-tools">
+              <label for="sweep-filter" class="sr-only">Filter rows</label>
+              <input id="sweep-filter" class="filter" type="search" placeholder="Filter by name, address or recipient" spellcheck="false" autocomplete="off" />
+              <label class="check">
+                <input type="checkbox" id="sweep-elsewhere" />
+                Only aliases forwarding elsewhere
+              </label>
+              <span id="sweep-count" class="muted"></span>
+            </div>
+
+            <div class="table-wrap">
+              <table class="report">
+                <thead>
+                  <tr>
+                    <th scope="col">Google account</th>
+                    <th scope="col">Matching address</th>
+                    <th scope="col">linux.com alias</th>
+                    <th scope="col">Forwards to</th>
+                    <th scope="col">To this user?</th>
+                    <th scope="col">Org unit</th>
+                  </tr>
+                </thead>
+                <tbody id="sweep-rows"></tbody>
+              </table>
+              <p id="sweep-empty" class="empty" hidden>No matches.</p>
+            </div>
+            <p id="sweep-note" class="muted note"></p>
+          </section>
+        </div>
       </main>
     </div>
   </body>
