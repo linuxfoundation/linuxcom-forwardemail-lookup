@@ -121,7 +121,7 @@ The **Org sweep** page (`#/sweep`, API `GET /api/sweep`) lists every **active** 
 
 - **What's compared:** only `@linuxfoundation.org` addresses (`SWEEP_GOOGLE_DOMAIN` in `wrangler.jsonc`). Aliases on other domains are ignored, although they count when deciding whether the ForwardEmail alias forwards to the same person.
 - **Each row shows** the Google account, the matching address (primary or alias), the linux.com alias and whether it's enabled, its recipients, and whether it forwards to one of that user's own addresses. "No — elsewhere" is the case worth reviewing.
-- **Download:** "Download CSV" saves the full report. Cells that start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
+- **Download:** "Download CSV" saves the full report. Cells that start with `=`, `+`, `-`, `@`, a tab or a line break (or the full-width `＝＋－＠`) are prefixed with `'` so spreadsheets don't run them as formulas.
 - **How it works:** it reads the whole Google user list (500 per page) and the whole ForwardEmail alias list once, then joins them in memory, so a run takes a handful of API calls rather than one per address. Catch-all (`*`) and regex aliases can't be matched by name; the report says how many were skipped.
 - **Permissions:** no new ones. It uses the existing `admin.directory.user.readonly` delegation and the ForwardEmail token. Each run logs a `sweep` event with the actor and counts (no addresses) to Workers Logs.
 

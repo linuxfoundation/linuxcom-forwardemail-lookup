@@ -411,11 +411,13 @@ async function runSweep() {
   }
 }
 
-// CSV with every cell quoted. Cells that a spreadsheet would treat as a
-// formula (leading = + - @ tab CR) are prefixed with ' (CSV injection).
+// CSV with every cell quoted. Cells that a spreadsheet could treat as a
+// formula are prefixed with ' (CSV injection): a leading = + - @, tab, CR or
+// LF (OWASP's list), plus the full-width ＝ ＋ － ＠ forms some apps accept.
+const CSV_FORMULA_START = /^[=+\-@\t\r\n＝＋－＠]/;
 function csvCell(v) {
   let s = v === null || v === undefined ? "" : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  if (CSV_FORMULA_START.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 }
 
