@@ -120,7 +120,13 @@ Dependency and CI rules are in [AGENTS.md](AGENTS.md), which follows [package-ma
 The **Org sweep** page (`#/sweep`, API `GET /api/sweep`) lists every **active** Google Workspace account (not suspended or archived) that has an `@linuxfoundation.org` address, primary or alias, whose local part also exists as an explicit ForwardEmail `@linux.com` alias. For example, `jane@linuxfoundation.org` on Jane's account and a ForwardEmail alias `jane@linux.com`.
 
 - **What's compared:** only `@linuxfoundation.org` addresses (`SWEEP_GOOGLE_DOMAIN` in `wrangler.jsonc`). Aliases on other domains are ignored, although they count when deciding whether the ForwardEmail alias forwards to the same person.
-- **Each row shows** the Google account, the matching address (primary or alias), the linux.com alias and whether it's enabled, its recipients, and whether it forwards to one of that user's own addresses. "No — elsewhere" is the case worth reviewing.
+- **Each row shows** the Google account, the matching address (primary or alias), the linux.com alias and whether it's enabled, its recipients, and whether it forwards to one of that user's own addresses.
+- **Review flags** ([src/review.ts](src/review.ts)): each row gets a level and the reasons behind it. Rows are sorted most urgent first, and "Only needs review" filters to the flagged rows.
+  - **High:** a shared or role account (its org unit is under `SWEEP_SHARED_ORG_UNITS`, default `/Special access`, or its name is something like `ap@`, `support@` or `billing@`) whose enabled linux.com alias forwards outside the organization.
+  - **Review:** the alias forwards outside to an address that doesn't resemble the person. It resembles them if it contains their surname, the first four letters of it, or one of their own address names. A first name alone doesn't count, so `john@` → `john.other@…` is flagged.
+  - **Never flagged:** aliases that forward to the user, and destinations on `linuxfoundation.org` or `linux.com` (including subdomains).
+  - **Disabled aliases** are at most Review and say so.
+  - These are heuristics to point a human at rows worth checking. Expect a few personal handles to show up as Review.
 - **Download:** "Download CSV" saves the full report. Cells that start with `=`, `+`, `-`, `@`, a tab or a line break (or the full-width `＝＋－＠`) are prefixed with `'` so spreadsheets don't run them as formulas.
 - **How it works:** it reads the whole Google user list (500 per page) and the whole ForwardEmail alias list once, then joins them in memory, so a run takes a handful of API calls rather than one per address. Catch-all (`*`) and regex aliases can't be matched by name; the report says how many were skipped.
 - **Permissions:** no new ones. It uses the existing `admin.directory.user.readonly` delegation and the ForwardEmail token. Each run logs a `sweep` event with the actor and counts (no addresses) to Workers Logs.

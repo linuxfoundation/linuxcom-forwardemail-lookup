@@ -68,6 +68,7 @@ export function makeEnv(keys: Keys, overrides: Partial<Env> = {}): Env {
     FE_DOMAIN: "linux.com",
     GOOGLE_LOOKUP_DOMAIN: "linux.com",
     SWEEP_GOOGLE_DOMAIN: "linuxfoundation.org",
+    SWEEP_SHARED_ORG_UNITS: "/Special access",
     ACCESS_TEAM_DOMAIN: TEAM,
     ACCESS_AUD: AUD,
     GOOGLE_ADMIN_SUBJECT: "readonly-admin@example.org",

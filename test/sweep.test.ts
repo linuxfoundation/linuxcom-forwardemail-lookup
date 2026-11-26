@@ -194,6 +194,73 @@ describe("runSweep", () => {
     expect((await runSweep(env)).stats.forwardEmailAliases).toBe(1);
   });
 
+  it("flags matches for review and lists the most urgent first", async () => {
+    mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([
+        [
+          fe("ap", ["someone@store.example"]),
+          fe("pat", ["pat.other@gmail.com"]),
+          fe("psmithson", ["pat.smithson@gmail.com"]),
+          fe("zed", ["zed@linuxfoundation.org"]),
+        ],
+      ]),
+      [USERS_LIST]: usersPages([
+        [
+          user("ap@linuxfoundation.org", { name: { fullName: "Accounts Payable" }, orgUnitPath: "/Special access" }),
+          user("psmithson@linuxfoundation.org", { name: { fullName: "Pat Smithson" }, aliases: ["pat@linuxfoundation.org"] }),
+          user("zed@linuxfoundation.org", { name: { fullName: "Zed Zulu" } }),
+        ],
+      ]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches.map((m) => [m.forwardEmailAlias, m.review])).toEqual([
+      ["ap@linux.com", "high"],
+      ["pat@linux.com", "review"],
+      ["psmithson@linux.com", "none"],
+      ["zed@linux.com", "none"],
+    ]);
+    expect(report.matches[1]!.reviewReasons[0]).toContain("pat.other@gmail.com");
+    expect(report.stats).toMatchObject({ reviewHigh: 1, reviewOther: 1 });
+  });
+
+  it("requests and uses Google's structured given/family names", async () => {
+    const calls = mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([[fe("msmithson", ["ann.jones@outside.example"])]]),
+      [USERS_LIST]: usersPages([
+        [user("msmithson@linuxfoundation.org", { name: { fullName: "Mary Ann Smithson", givenName: "Mary Ann", familyName: "Smithson" } })],
+      ]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches[0]).toMatchObject({ review: "review" });
+    const fields = new URL(calls.find((r) => r.url.startsWith(USERS_LIST))!.url).searchParams.get("fields")!;
+    expect(fields).toContain("name/givenName");
+    expect(fields).toContain("name/familyName");
+  });
+
+  it("flags a role-name alias on an ordinary account as High", async () => {
+    mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([[fe("support", ["support@vendor.example"])]]),
+      [USERS_LIST]: usersPages([
+        [user("sharedservices@linuxfoundation.org", { orgUnitPath: "/Staff", aliases: ["support@linuxfoundation.org"] })],
+      ]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches[0]).toMatchObject({ forwardEmailAlias: "support@linux.com", review: "high" });
+  });
+
+  it("classifies normalized recipients (whitespace / case can't make an internal address look external)", async () => {
+    mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([[fe("careers", [" Root@Linux.COM "])]]),
+      [USERS_LIST]: usersPages([[user("careers@linuxfoundation.org", { orgUnitPath: "/Special access" })]]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches[0]).toMatchObject({ forwardEmailAlias: "careers@linux.com", review: "none" });
+  });
+
   it("surfaces upstream failures", async () => {
     mockFetch({
       ...tokenRoute,

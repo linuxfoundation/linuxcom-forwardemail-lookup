@@ -7,6 +7,8 @@ export interface Env {
   GOOGLE_LOOKUP_DOMAIN: string;
   /** Google domain whose addresses the org sweep compares, e.g. "linuxfoundation.org". */
   SWEEP_GOOGLE_DOMAIN: string;
+  /** Comma-separated org-unit path prefixes holding shared / role accounts. */
+  SWEEP_SHARED_ORG_UNITS?: string;
 
   /** Zero Trust team domain, e.g. "yourteam.cloudflareaccess.com". */
   ACCESS_TEAM_DOMAIN?: string;

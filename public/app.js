@@ -339,8 +339,10 @@ function sweepRowsShown() {
   if (!sweepReport) return [];
   const q = $("sweep-filter").value.trim().toLowerCase();
   const elsewhereOnly = $("sweep-elsewhere").checked;
+  const reviewOnly = $("sweep-review").checked;
   return sweepReport.matches.filter((m) => {
     if (elsewhereOnly && m.forwardsToUser) return false;
+    if (reviewOnly && m.review === "none") return false;
     if (!q) return true;
     return [m.googleUser, m.googleName, m.googleAddress, m.forwardEmailAlias, m.orgUnit, ...m.forwardEmailRecipients]
       .some((v) => v && String(v).toLowerCase().includes(q));
@@ -353,6 +355,9 @@ function renderSweepRows() {
   tbody.replaceChildren();
   for (const m of rows) {
     const tr = document.createElement("tr");
+    if (m.review !== "none") tr.className = `flag-${m.review}`;
+    const flag = cell(tr, m.review === "high" ? pill("High", "bad") : m.review === "review" ? pill("Review", "warn") : text("—", "sub"));
+    for (const reason of m.reviewReasons) flag.append(text(reason, "reason"));
     cell(tr, text(m.googleName || "—", "strong"), text(m.googleUser, "sub"));
     cell(tr, text(m.googleAddress), pill(m.addressType === "primary" ? "Primary" : "Alias", "neutral"));
     const alias = cell(tr, text(m.forwardEmailAlias));
@@ -380,7 +385,9 @@ function renderSweep(report) {
     stat(`@${report.googleDomain} addresses checked`, s.googleAddressesChecked),
     stat(`${report.forwardEmailDomain} aliases`, s.forwardEmailAliases),
     stat("Matches", s.matches, s.matches ? "accent" : ""),
-    stat("Forwarding elsewhere", s.matchesForwardingElsewhere, s.matchesForwardingElsewhere ? "warn" : ""),
+    stat("Forwarding elsewhere", s.matchesForwardingElsewhere),
+    stat("High priority", s.reviewHigh, s.reviewHigh ? "bad" : ""),
+    stat("Needs review", s.reviewOther, s.reviewOther ? "warn" : ""),
   );
   const notes = [];
   if (s.forwardEmailAliasesSkipped) {
@@ -423,12 +430,14 @@ function csvCell(v) {
 
 function sweepCsv(report) {
   const header = [
+    "review", "review_reasons",
     "google_account", "google_name", "org_unit", "matching_address", "address_type",
     "linux_com_alias", "alias_enabled", "forwards_to", "forwards_to_this_user", "alias_description", "alias_labels",
   ];
   const lines = [header.map(csvCell).join(",")];
   for (const m of report.matches) {
     lines.push([
+      m.review === "none" ? "" : m.review, m.reviewReasons.join("; "),
       m.googleUser, m.googleName, m.orgUnit, m.googleAddress, m.addressType,
       m.forwardEmailAlias, m.forwardEmailEnabled === null ? "" : m.forwardEmailEnabled ? "yes" : "no",
       m.forwardEmailRecipients.join("; "), m.forwardsToUser ? "yes" : "no",
@@ -457,6 +466,7 @@ async function init() {
   $("sweep-csv").addEventListener("click", downloadSweepCsv);
   $("sweep-filter").addEventListener("input", renderSweepRows);
   $("sweep-elsewhere").addEventListener("change", renderSweepRows);
+  $("sweep-review").addEventListener("change", renderSweepRows);
   window.addEventListener("hashchange", showView);
   showView();
 
