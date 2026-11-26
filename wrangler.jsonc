@@ -27,6 +27,8 @@
   "vars": {
     "FE_DOMAIN": "linux.com",
     "GOOGLE_LOOKUP_DOMAIN": "linux.com",
-    "SWEEP_GOOGLE_DOMAIN": "linuxfoundation.org"
+    "SWEEP_GOOGLE_DOMAIN": "linuxfoundation.org",
+    // Org units whose accounts are shared/role mailboxes (comma-separated).
+    "SWEEP_SHARED_ORG_UNITS": "/Special access"
   }
 }

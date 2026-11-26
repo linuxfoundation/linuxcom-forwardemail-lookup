@@ -194,6 +194,36 @@ describe("runSweep", () => {
     expect((await runSweep(env)).stats.forwardEmailAliases).toBe(1);
   });
 
+  it("flags matches for review and lists the most urgent first", async () => {
+    mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([
+        [
+          fe("ap", ["someone@store.example"]),
+          fe("pat", ["pat.other@gmail.com"]),
+          fe("psmithson", ["pat.smithson@gmail.com"]),
+          fe("zed", ["zed@linuxfoundation.org"]),
+        ],
+      ]),
+      [USERS_LIST]: usersPages([
+        [
+          user("ap@linuxfoundation.org", { name: { fullName: "Accounts Payable" }, orgUnitPath: "/Special access" }),
+          user("psmithson@linuxfoundation.org", { name: { fullName: "Pat Smithson" }, aliases: ["pat@linuxfoundation.org"] }),
+          user("zed@linuxfoundation.org", { name: { fullName: "Zed Zulu" } }),
+        ],
+      ]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches.map((m) => [m.forwardEmailAlias, m.review])).toEqual([
+      ["ap@linux.com", "high"],
+      ["pat@linux.com", "review"],
+      ["psmithson@linux.com", "none"],
+      ["zed@linux.com", "none"],
+    ]);
+    expect(report.matches[1]!.reviewReasons[0]).toContain("pat.other@gmail.com");
+    expect(report.stats).toMatchObject({ reviewHigh: 1, reviewOther: 1 });
+  });
+
   it("surfaces upstream failures", async () => {
     mockFetch({
       ...tokenRoute,

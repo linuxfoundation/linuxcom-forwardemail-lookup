@@ -155,6 +155,10 @@
               <label for="sweep-filter" class="sr-only">Filter rows</label>
               <input id="sweep-filter" class="filter" type="search" placeholder="Filter by name, address or recipient" spellcheck="false" autocomplete="off" />
               <label class="check">
+                <input type="checkbox" id="sweep-review" />
+                Only needs review
+              </label>
+              <label class="check">
                 <input type="checkbox" id="sweep-elsewhere" />
                 Only aliases forwarding elsewhere
               </label>
@@ -165,6 +169,7 @@
               <table class="report">
                 <thead>
                   <tr>
+                    <th scope="col">Review</th>
                     <th scope="col">Google account</th>
                     <th scope="col">Matching address</th>
                     <th scope="col">linux.com alias</th>
