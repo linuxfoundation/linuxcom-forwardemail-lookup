@@ -5,6 +5,8 @@ export interface Env {
   FE_DOMAIN: string;
   /** Domain appended to the local part for Google Workspace lookups. */
   GOOGLE_LOOKUP_DOMAIN: string;
+  /** Google domain whose addresses the org sweep compares, e.g. "linuxfoundation.org". */
+  SWEEP_GOOGLE_DOMAIN: string;
 
   /** Zero Trust team domain, e.g. "yourteam.cloudflareaccess.com". */
   ACCESS_TEAM_DOMAIN?: string;
