@@ -98,6 +98,9 @@ export async function runSweep(env: Env, now: () => number = Date.now): Promise<
         {
           primaryEmail: user.primaryEmail,
           fullName: user.fullName,
+          givenName: user.givenName,
+          familyName: user.familyName,
+          matchedLocalPart: local,
           orgUnit: user.orgUnitPath,
           ownLocalParts,
           aliasEnabled: alias.enabled,

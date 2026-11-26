@@ -6,6 +6,11 @@ export type ReviewLevel = "high" | "review" | "none";
 export interface ReviewInput {
   primaryEmail: string;
   fullName: string | null;
+  /** Google's structured name parts; preferred over splitting fullName. */
+  givenName?: string | null;
+  familyName?: string | null;
+  /** Local part of the @SWEEP_GOOGLE_DOMAIN address that matched. */
+  matchedLocalPart?: string;
   orgUnit: string | null;
   /** Local parts of the user's @SWEEP_GOOGLE_DOMAIN addresses. */
   ownLocalParts: string[];
@@ -37,41 +42,64 @@ function isInternal(address: string, internalDomains: string[]): boolean {
   return internalDomains.some((d) => domain === d || domain.endsWith(`.${d}`));
 }
 
-export function isSharedAccount(input: Pick<ReviewInput, "primaryEmail" | "orgUnit">, opts: ReviewOptions): boolean {
-  const local = input.primaryEmail.slice(0, input.primaryEmail.indexOf("@")).toLowerCase();
-  if (ROLE_LOCAL_PARTS.has(local)) return true;
+const isRoleName = (local: string) => ROLE_LOCAL_PARTS.has(local.toLowerCase());
+
+/**
+ * A shared / role account: its primary address or the matched alias is a role
+ * name (ap@, support@, ...), or it lives in one of the shared org units.
+ */
+export function isSharedAccount(
+  input: Pick<ReviewInput, "primaryEmail" | "orgUnit" | "matchedLocalPart">,
+  opts: ReviewOptions,
+): boolean {
+  const primaryLocal = input.primaryEmail.slice(0, input.primaryEmail.indexOf("@"));
+  if (isRoleName(primaryLocal) || (input.matchedLocalPart && isRoleName(input.matchedLocalPart))) return true;
   const ou = input.orgUnit ?? "";
   return opts.sharedOrgUnits.some((prefix) => prefix && (ou === prefix || ou.startsWith(`${prefix}/`)));
 }
 
+/** Name words: split on spaces, hyphens and apostrophes, then normalized. */
+const words = (s: string | null | undefined) => (s ?? "").split(/[\s\-'\u2019]+/).map(alnum).filter(Boolean);
+
 /**
  * Whether an outside recipient plausibly belongs to this person.
  *
- * The mailbox name (before "@") must contain their surname (any name token
- * after the first, or its first four letters when longer) or one of their own
- * local parts (3+ characters). The domain only counts on a full token match
- * (4+ characters, e.g. a personal domain like "smithson.example"), never on a
- * prefix, so a provider such as gmail/hotmail can't match "Mailer".
- * A first name alone is not enough ("john" matches far too many people), so
- * a local part that is just the first name ("john@", "frank@") is ignored.
+ * Surname: Google's structured familyName (e.g. "Kroah-Hartman" gives
+ * "kroah" and "hartman"); only without it, every word of fullName after the
+ * first. Given names: givenName (all words, e.g. "Mary Ann"), else the first
+ * word of fullName.
+ *
+ * The mailbox name (before "@") must contain a surname word (or its first
+ * four letters when longer) or one of their own local parts (3+ characters).
+ * The domain only counts on a full word (4+ characters, e.g. a personal
+ * domain), never a prefix, so a provider such as gmail can't match "Mailer".
+ * Given names alone are not enough ("john" or "ann" match far too many
+ * people), and neither are role names (support@ is not a person), so local
+ * parts that are just one of those are ignored.
  */
-export function resemblesPerson(recipient: string, input: Pick<ReviewInput, "fullName" | "ownLocalParts" | "primaryEmail">): boolean {
+export function resemblesPerson(
+  recipient: string,
+  input: Pick<ReviewInput, "fullName" | "givenName" | "familyName" | "ownLocalParts" | "primaryEmail">,
+): boolean {
   const at = recipient.lastIndexOf("@");
   const mailbox = alnum(at === -1 ? recipient : recipient.slice(0, at));
   const domainLabels = (at === -1 ? "" : recipient.slice(at + 1)).toLowerCase().split(".").slice(0, -1).map(alnum);
 
-  const tokens = (input.fullName ?? "").split(/\s+/).map(alnum).filter(Boolean);
-  const firstName = tokens[0] ?? "";
-  const whole = new Set<string>(); // full surname tokens and own local parts
+  const full = words(input.fullName);
+  const surnames = input.familyName?.trim() ? words(input.familyName) : full.slice(1);
+  const givenNames = new Set(input.givenName?.trim() ? words(input.givenName) : full.slice(0, 1));
+
+  const whole = new Set<string>(); // full surname words and own local parts
   const prefixes = new Set<string>(); // 4-letter surname prefixes (mailbox only)
-  for (const t of tokens.slice(1)) {
+  for (const t of surnames) {
+    if (givenNames.has(t)) continue;
     if (t.length >= 3) whole.add(t);
     if (t.length >= 5) prefixes.add(t.slice(0, 4));
   }
   const primaryLocal = input.primaryEmail.slice(0, input.primaryEmail.indexOf("@"));
   for (const l of [primaryLocal, ...input.ownLocalParts]) {
     const n = alnum(l);
-    if (n.length >= 3 && n !== firstName) whole.add(n);
+    if (n.length >= 3 && !givenNames.has(n) && !isRoleName(l)) whole.add(n);
   }
 
   for (const n of [...whole, ...prefixes]) if (mailbox.includes(n)) return true;

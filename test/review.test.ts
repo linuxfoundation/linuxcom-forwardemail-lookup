@@ -56,6 +56,31 @@ describe("resemblesPerson", () => {
     expect(resemblesPerson("pat@smithery.example", named)).toBe(false); // prefix "smit" only counts in the mailbox
   });
 
+  it("uses Google's structured names: a second given name is not a surname", () => {
+    const maryAnn = {
+      primaryEmail: "msmithson@linuxfoundation.org",
+      fullName: "Mary Ann Smithson",
+      givenName: "Mary Ann",
+      familyName: "Smithson",
+      ownLocalParts: ["msmithson"],
+    };
+    expect(resemblesPerson("ann.jones@outside.example", maryAnn)).toBe(false);
+    expect(resemblesPerson("mary.ann@outside.example", maryAnn)).toBe(false);
+    expect(resemblesPerson("ann.smithson@outside.example", maryAnn)).toBe(true);
+  });
+
+  it("splits hyphenated family names into words", () => {
+    const hyphen = { primaryEmail: "pat@linuxfoundation.org", fullName: "Pat Lee-Smithson", givenName: "Pat", familyName: "Lee-Smithson", ownLocalParts: ["pat"] };
+    expect(resemblesPerson("pat@smithson.example", hyphen)).toBe(true); // personal domain, full word
+    expect(resemblesPerson("lee.p@outside.example", hyphen)).toBe(true);
+    expect(resemblesPerson("pat@other.example", hyphen)).toBe(false);
+  });
+
+  it("does not treat a role-name alias as evidence the recipient is the person", () => {
+    const withInfo = { primaryEmail: "psmith@linuxfoundation.org", fullName: "Pat Smithson", ownLocalParts: ["psmith", "info"] };
+    expect(resemblesPerson("info@other.example", withInfo)).toBe(false);
+  });
+
   it("ignores a local part that is just the first name", () => {
     const named = { primaryEmail: "pjones@linuxfoundation.org", fullName: "Pat Jones", ownLocalParts: ["pjones", "pat"] };
     expect(resemblesPerson("pat.other@gmail.com", named)).toBe(false);
@@ -90,6 +115,22 @@ describe("classify", () => {
   it("flags a shared account forwarding outside as high", () => {
     const r = classify(person({ primaryEmail: "ap@linuxfoundation.org", fullName: "Accounts Payable", recipients: ["x@store.example"] }), opts);
     expect(r).toEqual({ level: "high", reasons: ["Shared/role account: its linux.com alias forwards outside the organization"] });
+  });
+
+  it("treats a role-name alias on a non-shared account as shared", () => {
+    const r = classify(
+      person({
+        primaryEmail: "sharedservices@linuxfoundation.org",
+        fullName: "Shared Services",
+        orgUnit: "/Staff",
+        matchedLocalPart: "support",
+        ownLocalParts: ["sharedservices", "support"],
+        recipients: ["support@vendor.example"],
+      }),
+      opts,
+    );
+    expect(r.level).toBe("high");
+    expect(isSharedAccount({ primaryEmail: "sharedservices@linuxfoundation.org", orgUnit: "/Staff", matchedLocalPart: "support" }, opts)).toBe(true);
   });
 
   it("only gives High to an alias known to be enabled", () => {

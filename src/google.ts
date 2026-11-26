@@ -313,6 +313,8 @@ export async function lookupGoogle(email: string, env: Env, trace: TraceStep[] =
 export interface DirectoryUser {
   primaryEmail: string;
   fullName: string | null;
+  givenName: string | null;
+  familyName: string | null;
   /** Editable aliases plus domain-alias (non-editable) addresses. */
   aliases: string[];
   suspended: boolean;
@@ -343,7 +345,8 @@ export async function listDirectoryUsers(
       projection: "basic",
       viewType: "admin_view",
       orderBy: "email",
-      fields: "nextPageToken,users(primaryEmail,name/fullName,aliases,nonEditableAliases,suspended,archived,orgUnitPath)",
+      fields:
+        "nextPageToken,users(primaryEmail,name/fullName,name/givenName,name/familyName,aliases,nonEditableAliases,suspended,archived,orgUnitPath)",
     });
     if (opts.activeOnly) params.set("query", "isSuspended=false");
     if (pageToken) params.set("pageToken", pageToken);
@@ -355,10 +358,13 @@ export async function listDirectoryUsers(
 
     const body = (await res.json()) as { users?: Record<string, unknown>[]; nextPageToken?: unknown };
     for (const u of body.users ?? []) {
-      const name = u.name as { fullName?: unknown } | undefined;
+      const name = u.name as { fullName?: unknown; givenName?: unknown; familyName?: unknown } | undefined;
+      const str = (v: unknown) => (typeof v === "string" && v ? v : null);
       const user: DirectoryUser = {
         primaryEmail: String(u.primaryEmail ?? ""),
-        fullName: typeof name?.fullName === "string" ? name.fullName : null,
+        fullName: str(name?.fullName),
+        givenName: str(name?.givenName),
+        familyName: str(name?.familyName),
         aliases: [...strings(u.aliases), ...strings(u.nonEditableAliases)],
         suspended: u.suspended === true,
         archived: u.archived === true,
