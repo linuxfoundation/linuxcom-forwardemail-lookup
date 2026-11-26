@@ -22,6 +22,12 @@ export interface Env {
   FORWARDEMAIL_API_TOKEN?: string;
   GOOGLE_SA_KEY_JSON?: string;
 
+  /**
+   * Comma-separated Cloudflare Access service-token client IDs that may call
+   * the API / MCP endpoint without a user (headless agents). Empty = none.
+   */
+  ACCESS_SERVICE_TOKEN_IDS?: string;
+
   /** Local development only; honored only for localhost requests. */
   DEV_BYPASS_ACCESS?: string;
 }

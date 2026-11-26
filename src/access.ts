@@ -74,7 +74,14 @@ export async function requireAccess(req: Request, env: Env): Promise<Identity> {
     throw new AuthError(`invalid Access token: ${(err as Error).message}`);
   }
 
-  const email = typeof payload.email === "string" ? payload.email : null;
-  if (!email) throw new AuthError("Access token has no email claim");
-  return { email };
+  const email = typeof payload.email === "string" && payload.email ? payload.email : null;
+  if (email) return { email };
+
+  // Access service tokens (headless agents) carry the token's client ID in
+  // `common_name` and no email. Accept only the client IDs explicitly listed
+  // in ACCESS_SERVICE_TOKEN_IDS; the identity is logged as "service:<id>".
+  const clientId = typeof payload.common_name === "string" ? payload.common_name : "";
+  const allowed = (env.ACCESS_SERVICE_TOKEN_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (clientId && allowed.includes(clientId)) return { email: `service:${clientId}` };
+  throw new AuthError(clientId ? "Access service token is not on the allowlist" : "Access token has no email claim");
 }

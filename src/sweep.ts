@@ -158,3 +158,10 @@ export async function runSweep(env: Env, now: () => number = Date.now): Promise<
     matches,
   };
 }
+
+/** runSweep plus the audit log (counts only, no addresses). */
+export async function performSweep(env: Env, actor: string, via: "web" | "mcp" = "web"): Promise<SweepReport> {
+  const report = await runSweep(env);
+  console.log(JSON.stringify({ event: "sweep", actor, via, ...report.stats }));
+  return report;
+}
