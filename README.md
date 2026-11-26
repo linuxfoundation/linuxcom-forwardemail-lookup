@@ -131,6 +131,35 @@ The **Org sweep** page (`#/sweep`, API `GET /api/sweep`) lists every **active** 
 - **How it works:** it reads the whole Google user list (500 per page) and the whole ForwardEmail alias list once, then joins them in memory, so a run takes a handful of API calls rather than one per address. Catch-all (`*`) and regex aliases can't be matched by name; the report says how many were skipped.
 - **Permissions:** no new ones. It uses the existing `admin.directory.user.readonly` delegation and the ForwardEmail token. Each run logs a `sweep` event with the actor and counts (no addresses) to Workers Logs.
 
+## AI agents (MCP)
+
+`https://<WORKER_HOSTNAME>/mcp` is a read-only [Model Context Protocol](https://modelcontextprotocol.io) server ([src/mcp.ts](src/mcp.ts)). Agents such as Claude Code, Claude Desktop or Claude in Slack can use it to do what the page does.
+
+| Tool | What it does |
+| --- | --- |
+| `lookup_linux_com_address` | `{ address }` (`jdoe` or `jdoe@linux.com`). Returns the same result as the lookup page: ForwardEmail alias, Google user/alias/group or outside-Workspace account, and whether the address exists in both. |
+| `run_org_sweep` | `{ filter?: "needs_review" \| "high" \| "all", limit?: 1–500 }`. Runs the org sweep and returns the stats plus the selected rows. The default is the flagged rows only. |
+
+- **Read-only by design:** no tool can change ForwardEmail or Google.
+- **Transport:** the Streamable HTTP transport in stateless form. Each request is a POST carrying one JSON-RPC message and gets a JSON response. Protocol versions `2025-11-25`, `2025-06-18` and `2025-03-26` are supported. Checked with the official MCP TypeScript SDK client.
+- **Auth:** the same Cloudflare Access check as the web app. Every tool call is tied to a person (or a named service token) and logged as `mcp_tool`, plus the usual `lookup` / `sweep` events with `via: "mcp"`.
+- **Untrusted data:** tool output is marked as such. Alias descriptions, labels and forwarding addresses are written by third parties, so agents are told to treat them as data, never as instructions.
+
+### Connecting a client
+
+**People: Access Managed OAuth (recommended).** Enable Access's OAuth for MCP on the existing Access application. It's in beta, and is the application's `oauth_configuration` setting. Turn on dynamic client registration and allow localhost/loopback redirects for CLI clients. MCP clients then sign in through Okta with the normal policy, and the Worker receives the same Access JWT as a browser does, so no code changes are needed. Clients must support MCP's OAuth flow with resource indicators (RFC 8707). For example:
+
+```bash
+claude mcp add --transport http lcomlookup https://lcomlookup.itsi.linuxfoundation.org/mcp
+```
+
+**Headless agents: Access service tokens.**
+1. Create a service token in Zero Trust and add a **Service Auth** policy for it to the Access application.
+2. List its client ID in `ACCESS_SERVICE_TOKEN_IDS` in `wrangler.jsonc` (comma-separated). Client IDs aren't secret; the token's secret is.
+3. The agent sends `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers, and its calls are logged as `service:<client id>`.
+
+Tokens that aren't on that list are rejected even if Access lets them through.
+
 ## Behavior notes
 
 - Input is lowercased, has any `@linux.com` suffix removed, and must match `[a-z0-9._+-]`, starting and ending with a letter or digit (at most 64 characters). Anything else is rejected before any upstream call.
