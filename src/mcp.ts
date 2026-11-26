@@ -145,7 +145,8 @@ async function callTool(params: Record<string, unknown>, env: Env, actor: string
     if (name === "run_org_sweep") return await callSweep(args, env, actor);
   } catch (err) {
     if (err instanceof ToolInputError) return toolError(err.message);
-    if (err instanceof PublicError) return toolError(err.message);
+    // Provider errors can carry upstream diagnostic text: label it untrusted too.
+    if (err instanceof PublicError) return toolError(`${UNTRUSTED_NOTE}\n\n${err.message}`);
     console.error(JSON.stringify({ event: "mcp_tool_error", actor, tool: name, message: (err as Error)?.message }));
     return toolError("Unexpected error");
   }
@@ -165,6 +166,38 @@ function isSameOrigin(origin: string, requestUrl: string): boolean {
   }
 }
 
+/**
+ * Reads the body as UTF-8, counting bytes as they arrive and cancelling the
+ * stream once `maxBytes` is exceeded, so an oversized body is never fully
+ * buffered or decoded. Returns null when the limit is exceeded.
+ */
+async function readBodyLimited(req: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  if (!req.body) return "";
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 const isValidId = (id: unknown): id is string | number =>
   typeof id === "string" || (typeof id === "number" && Number.isFinite(id));
 
@@ -182,8 +215,8 @@ export async function handleMcp(req: Request, env: Env, actor: string): Promise<
     return rpcError(null, -32600, "Origin not allowed", 403);
   }
 
-  const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) return rpcError(null, -32600, "Request too large", 413);
+  const text = await readBodyLimited(req, MAX_BODY_BYTES);
+  if (text === null) return rpcError(null, -32600, "Request too large", 413);
 
   let msg: unknown;
   try {
@@ -205,6 +238,10 @@ export async function handleMcp(req: Request, env: Env, actor: string): Promise<
   // reject anything else before dispatching (so nothing reaches a provider).
   if (!isValidId(m.id)) return rpcError(null, -32600, "Invalid request: id must be a string or number", 400);
   const id = m.id;
+  // MCP params, when present, are always an object.
+  if ("params" in m && (m.params === null || typeof m.params !== "object" || Array.isArray(m.params))) {
+    return rpcError(id, -32602, "Invalid params: params must be an object");
+  }
   const params = (m.params ?? {}) as Record<string, unknown>;
 
   switch (m.method) {

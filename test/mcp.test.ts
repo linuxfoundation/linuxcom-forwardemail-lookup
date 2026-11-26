@@ -150,6 +150,56 @@ describe("/mcp protocol", () => {
     expect(calls.filter((c) => !c.url.startsWith(CERTS))).toHaveLength(0);
   });
 
+  it.each([[42], ["x"], [null], [[1, 2]]])("rejects non-object params %j with -32602", async (params) => {
+    upstreams();
+    for (const method of ["initialize", "ping", "tools/list"]) {
+      const r = (await (await rpc({ jsonrpc: "2.0", id: 1, method, params })).json()) as any;
+      expect(r.error).toMatchObject({ code: -32602 });
+      expect(r.result).toBeUndefined();
+    }
+  });
+
+  it("enforces the 64 KiB limit in bytes, not characters", async () => {
+    upstreams();
+    // 30,000 "€" = 30k characters but 90k UTF-8 bytes.
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping", params: { pad: "€".repeat(30_000) } });
+    expect(body.length).toBeLessThan(64 * 1024);
+    const res = await worker.fetch(
+      new Request(`${HOST}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-access-jwt-assertion": jwt },
+        body: new TextEncoder().encode(body),
+      }),
+      env,
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("stops reading a streamed body once it passes the limit", async () => {
+    upstreams();
+    let pulled = 0;
+    const chunk = new Uint8Array(16 * 1024).fill(0x20);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        if (pulled > 1000) controller.close(); // would be ~16 MB if read to the end
+        else controller.enqueue(chunk);
+      },
+    });
+    const res = await worker.fetch(
+      new Request(`${HOST}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-access-jwt-assertion": jwt },
+        body: stream,
+        // @ts-expect-error Node's fetch needs duplex for streamed request bodies
+        duplex: "half",
+      }),
+      env,
+    );
+    expect(res.status).toBe(413);
+    expect(pulled).toBeLessThan(10);
+  });
+
   it("accepts string and numeric ids and echoes them back", async () => {
     upstreams();
     expect(((await (await rpc({ jsonrpc: "2.0", id: "abc", method: "ping" })).json()) as any).id).toBe("abc");
@@ -237,6 +287,8 @@ describe("/mcp tools", () => {
     const r = await call(9, "tools/call", { name: "run_org_sweep", arguments: {} });
     expect(r.result).toMatchObject({ isError: true });
     expect(r.result.content[0].text).toContain("ForwardEmail API returned HTTP 500");
+    // Provider error text carries the same untrusted-data warning as results.
+    expect(r.result.content[0].text).toMatch(/^Data below comes from ForwardEmail and Google Workspace\./);
   });
 });
 
