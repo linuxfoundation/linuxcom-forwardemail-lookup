@@ -101,7 +101,7 @@ export async function runSweep(env: Env, now: () => number = Date.now): Promise<
           orgUnit: user.orgUnitPath,
           ownLocalParts,
           aliasEnabled: alias.enabled,
-          recipients: alias.recipients,
+          recipients, // trimmed + lower-cased, same as forwardsToUser uses
           forwardsToUser,
         },
         reviewOpts,

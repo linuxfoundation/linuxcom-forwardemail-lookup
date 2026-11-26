@@ -42,6 +42,20 @@ describe("resemblesPerson", () => {
     expect(resemblesPerson(recipient, p)).toBe(expected);
   });
 
+  it("matches name parts on the mailbox, not the email provider's domain", () => {
+    const mailer = { primaryEmail: "amailer@linuxfoundation.org", fullName: "Alex Mailer", ownLocalParts: ["amailer"] };
+    // "mail" (prefix of Mailer) must not match gmail / hotmail.
+    expect(resemblesPerson("stranger@gmail.com", mailer)).toBe(false);
+    expect(resemblesPerson("stranger@hotmail.com", mailer)).toBe(false);
+    expect(resemblesPerson("alex.mailer@gmail.com", mailer)).toBe(true);
+  });
+
+  it("accepts a personal domain on a full surname match", () => {
+    const named = { primaryEmail: "pjones@linuxfoundation.org", fullName: "Pat Q Smithson", ownLocalParts: ["pjones"] };
+    expect(resemblesPerson("pat@smithson.example", named)).toBe(true); // full token in domain
+    expect(resemblesPerson("pat@smithery.example", named)).toBe(false); // prefix "smit" only counts in the mailbox
+  });
+
   it("ignores a local part that is just the first name", () => {
     const named = { primaryEmail: "pjones@linuxfoundation.org", fullName: "Pat Jones", ownLocalParts: ["pjones", "pat"] };
     expect(resemblesPerson("pat.other@gmail.com", named)).toBe(false);
@@ -76,6 +90,13 @@ describe("classify", () => {
   it("flags a shared account forwarding outside as high", () => {
     const r = classify(person({ primaryEmail: "ap@linuxfoundation.org", fullName: "Accounts Payable", recipients: ["x@store.example"] }), opts);
     expect(r).toEqual({ level: "high", reasons: ["Shared/role account: its linux.com alias forwards outside the organization"] });
+  });
+
+  it("only gives High to an alias known to be enabled", () => {
+    const unknown = classify(person({ orgUnit: "/Special access", aliasEnabled: null, recipients: ["x@store.example"] }), opts);
+    expect(unknown.level).toBe("review");
+    expect(unknown.reasons).toContain("Alias enabled status is unknown");
+    expect(unknown.reasons).not.toContain("Alias is disabled in ForwardEmail");
   });
 
   it("downgrades disabled aliases and says why", () => {

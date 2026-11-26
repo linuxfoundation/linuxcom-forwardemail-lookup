@@ -224,6 +224,16 @@ describe("runSweep", () => {
     expect(report.stats).toMatchObject({ reviewHigh: 1, reviewOther: 1 });
   });
 
+  it("classifies normalized recipients (whitespace / case can't make an internal address look external)", async () => {
+    mockFetch({
+      ...tokenRoute,
+      [FE_LIST]: feListPages([[fe("careers", [" Root@Linux.COM "])]]),
+      [USERS_LIST]: usersPages([[user("careers@linuxfoundation.org", { orgUnitPath: "/Special access" })]]),
+    });
+    const report = await runSweep(env);
+    expect(report.matches[0]).toMatchObject({ forwardEmailAlias: "careers@linux.com", review: "none" });
+  });
+
   it("surfaces upstream failures", async () => {
     mockFetch({
       ...tokenRoute,

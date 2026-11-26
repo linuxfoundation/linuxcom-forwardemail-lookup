@@ -45,27 +45,37 @@ export function isSharedAccount(input: Pick<ReviewInput, "primaryEmail" | "orgUn
 }
 
 /**
- * Whether an outside recipient plausibly belongs to this person: it contains
- * their surname (any name token after the first, or its first four letters
- * when the token is longer) or one of their own local parts (3+ characters).
+ * Whether an outside recipient plausibly belongs to this person.
+ *
+ * The mailbox name (before "@") must contain their surname (any name token
+ * after the first, or its first four letters when longer) or one of their own
+ * local parts (3+ characters). The domain only counts on a full token match
+ * (4+ characters, e.g. a personal domain like "smithson.example"), never on a
+ * prefix, so a provider such as gmail/hotmail can't match "Mailer".
  * A first name alone is not enough ("john" matches far too many people), so
  * a local part that is just the first name ("john@", "frank@") is ignored.
  */
 export function resemblesPerson(recipient: string, input: Pick<ReviewInput, "fullName" | "ownLocalParts" | "primaryEmail">): boolean {
-  const target = alnum(recipient);
-  const needles = new Set<string>();
+  const at = recipient.lastIndexOf("@");
+  const mailbox = alnum(at === -1 ? recipient : recipient.slice(0, at));
+  const domainLabels = (at === -1 ? "" : recipient.slice(at + 1)).toLowerCase().split(".").slice(0, -1).map(alnum);
+
   const tokens = (input.fullName ?? "").split(/\s+/).map(alnum).filter(Boolean);
   const firstName = tokens[0] ?? "";
+  const whole = new Set<string>(); // full surname tokens and own local parts
+  const prefixes = new Set<string>(); // 4-letter surname prefixes (mailbox only)
   for (const t of tokens.slice(1)) {
-    if (t.length >= 3) needles.add(t);
-    if (t.length >= 5) needles.add(t.slice(0, 4));
+    if (t.length >= 3) whole.add(t);
+    if (t.length >= 5) prefixes.add(t.slice(0, 4));
   }
   const primaryLocal = input.primaryEmail.slice(0, input.primaryEmail.indexOf("@"));
   for (const l of [primaryLocal, ...input.ownLocalParts]) {
     const n = alnum(l);
-    if (n.length >= 3 && n !== firstName) needles.add(n);
+    if (n.length >= 3 && n !== firstName) whole.add(n);
   }
-  for (const n of needles) if (target.includes(n)) return true;
+
+  for (const n of [...whole, ...prefixes]) if (mailbox.includes(n)) return true;
+  for (const n of whole) if (n.length >= 4 && domainLabels.some((label) => label.includes(n))) return true;
   return false;
 }
 
@@ -75,7 +85,9 @@ export function classify(input: ReviewInput, opts: ReviewOptions): { level: Revi
   const outside = input.recipients.filter((r) => !isInternal(r, opts.internalDomains));
   if (outside.length === 0) return { level: "none", reasons: [] };
 
-  const enabled = input.aliasEnabled !== false;
+  // High needs an alias known to be enabled; an unknown status (null) stays
+  // at Review, and only an explicit false is described as disabled.
+  const enabled = input.aliasEnabled === true;
   const reasons: string[] = [];
   let level: ReviewLevel = "none";
 
@@ -90,6 +102,7 @@ export function classify(input: ReviewInput, opts: ReviewOptions): { level: Revi
     if (level === "none") level = "review";
   }
 
-  if (level !== "none" && !enabled) reasons.push("Alias is disabled in ForwardEmail");
+  if (level !== "none" && input.aliasEnabled === false) reasons.push("Alias is disabled in ForwardEmail");
+  if (level !== "none" && input.aliasEnabled === null) reasons.push("Alias enabled status is unknown");
   return { level, reasons };
 }
